@@ -9,48 +9,46 @@ import {
   it,
   xdescribe,
   xit,
-  TestComponentBuilder,
-  IS_DARTIUM
-} from 'angular2/test_lib';
+  Log,
+  TestComponentBuilder
+} from 'angular2/testing_internal';
 
-import {ListWrapper} from 'angular2/src/facade/collection';
 import {
-  Directive,
-  Component,
-  View,
-  onCheck,
-  onInit,
-  onChange,
-  onAllChangesDone
-} from 'angular2/angular2';
-import * as viewAnn from 'angular2/src/core/annotations_impl/view';
+  OnChanges,
+  OnInit,
+  DoCheck,
+  AfterContentInit,
+  AfterContentChecked,
+  AfterViewInit,
+  AfterViewChecked
+} from 'angular2/core';
+import {Directive, Component, View, ViewMetadata} from 'angular2/src/core/metadata';
 
 export function main() {
   describe('directive lifecycle integration spec', () => {
 
-    it('should invoke lifecycle methods onChange > onInit > onCheck > onAllChangesDone',
-       inject([TestComponentBuilder, AsyncTestCompleter], (tcb: TestComponentBuilder, async) => {
+    it('should invoke lifecycle methods ngOnChanges > ngOnInit > ngDoCheck > ngAfterContentChecked',
+       inject([TestComponentBuilder, Log, AsyncTestCompleter], (tcb: TestComponentBuilder, log: Log,
+                                                                async) => {
          tcb.overrideView(
                 MyComp,
-                new viewAnn.View(
-                    {template: '<div [field]="123" lifecycle></div>', directives: [LifecycleDir]}))
+                new ViewMetadata(
+                    {template: '<div [field]="123" lifecycle></div>', directives: [LifecycleCmp]}))
              .createAsync(MyComp)
              .then((tc) => {
-               var dir = tc.componentViewChildren[0].inject(LifecycleDir);
                tc.detectChanges();
 
-               expect(dir.log).toEqual(["onChange", "onInit", "onCheck", "onAllChangesDone"]);
+               expect(log.result())
+                   .toEqual(
+                       "ngOnChanges; ngOnInit; ngDoCheck; ngAfterContentInit; ngAfterContentChecked; child_ngDoCheck; " +
+                       "ngAfterViewInit; ngAfterViewChecked");
 
+               log.clear();
                tc.detectChanges();
 
-               expect(dir.log).toEqual([
-                 "onChange",
-                 "onInit",
-                 "onCheck",
-                 "onAllChangesDone",
-                 "onCheck",
-                 "onAllChangesDone"
-               ]);
+               expect(log.result())
+                   .toEqual(
+                       "ngDoCheck; ngAfterContentChecked; child_ngDoCheck; ngAfterViewChecked");
 
                async.done();
              });
@@ -59,24 +57,32 @@ export function main() {
 }
 
 
-@Directive({
-  selector: "[lifecycle]",
-  properties: ['field'],
-  lifecycle: [onChange, onCheck, onInit, onAllChangesDone]
-})
-class LifecycleDir {
+@Directive({selector: '[lifecycle-dir]'})
+class LifecycleDir implements DoCheck {
+  constructor(private _log: Log) {}
+  ngDoCheck() { this._log.add("child_ngDoCheck"); }
+}
+
+@Component({selector: "[lifecycle]", inputs: ['field']})
+@View({template: `<div lifecycle-dir></div>`, directives: [LifecycleDir]})
+class LifecycleCmp implements OnChanges, OnInit, DoCheck, AfterContentInit, AfterContentChecked,
+    AfterViewInit, AfterViewChecked {
   field;
-  log: List<string>;
+  constructor(private _log: Log) {}
 
-  constructor() { this.log = []; }
+  ngOnChanges(_) { this._log.add("ngOnChanges"); }
 
-  onChange(_) { this.log.push("onChange"); }
+  ngOnInit() { this._log.add("ngOnInit"); }
 
-  onInit() { this.log.push("onInit"); }
+  ngDoCheck() { this._log.add("ngDoCheck"); }
 
-  onCheck() { this.log.push("onCheck"); }
+  ngAfterContentInit() { this._log.add("ngAfterContentInit"); }
 
-  onAllChangesDone() { this.log.push("onAllChangesDone"); }
+  ngAfterContentChecked() { this._log.add("ngAfterContentChecked"); }
+
+  ngAfterViewInit() { this._log.add("ngAfterViewInit"); }
+
+  ngAfterViewChecked() { this._log.add("ngAfterViewChecked"); }
 }
 
 @Component({selector: 'my-comp'})

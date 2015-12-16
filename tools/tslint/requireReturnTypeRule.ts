@@ -1,16 +1,18 @@
-/// <reference path="../../node_modules/typescript/bin/typescriptServices.d.ts" />
-/// <reference path="../../node_modules/gulp-tslint/node_modules/tslint/lib/tslint.d.ts" />
+import {RuleFailure} from 'tslint/lib/lint';
+import {AbstractRule} from 'tslint/lib/rules';
+import {RuleWalker} from 'tslint/lib/language/walker';
+import * as ts from 'tslint/node_modules/typescript';
 
-export class Rule extends Lint.Rules.AbstractRule {
+export class Rule extends AbstractRule {
   public static FAILURE_STRING = "missing type declaration";
 
-  public apply(sourceFile: ts.SourceFile): Lint.RuleFailure[] {
+  public apply(sourceFile: ts.SourceFile): RuleFailure[] {
     const typedefWalker = new TypedefWalker(sourceFile, this.getOptions());
     return this.applyWithWalker(typedefWalker);
   }
 }
 
-class TypedefWalker extends Lint.RuleWalker {
+class TypedefWalker extends RuleWalker {
   hasReturnStatement: boolean;
 
   public visitFunctionDeclaration(node: ts.FunctionDeclaration) {
@@ -40,21 +42,20 @@ class TypedefWalker extends Lint.RuleWalker {
   }
 
   private handleCallSignature(node: ts.SignatureDeclaration) {
-    const location = (node.parameters != null) ? node.parameters.end : null;
     // set accessors can't have a return type.
     if (node.kind !== ts.SyntaxKind.SetAccessor) {
-      this.checkTypeAnnotation(location, node.type, node.name);
+      this.checkTypeAnnotation(node.type, node.name);
     }
   }
 
-  private checkTypeAnnotation(location: number, typeAnnotation: ts.TypeNode, name?: ts.Node) {
+  private checkTypeAnnotation(typeAnnotation: ts.TypeNode, name?: ts.Node) {
     if (typeAnnotation == null) {
       let ns = "<name missing>";
       if (name != null && name.kind === ts.SyntaxKind.Identifier) {
         ns = (<ts.Identifier>name).text;
       }
       if (ns.charAt(0) === '_') return;
-      let failure = this.createFailure(location, 1, "expected " + ns + " to have a return type");
+      let failure = this.createFailure(null, 1, "expected " + ns + " to have a return type");
       this.addFailure(failure);
     }
   }

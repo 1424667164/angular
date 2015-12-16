@@ -52,7 +52,7 @@ CSS Selectors can be combined:
 
 ## Directives
 
-The simplest kind of directive is a decorator. Directives are usefull for encapsulating behavior.
+The simplest kind of directive is a decorator. Directives are useful for encapsulating behavior.
 
 * Multiple decorators can be placed on a single element.
 * Directives do not introduce new evaluation context.
@@ -67,14 +67,14 @@ Here is a trivial example of a tooltip decorator. The directive will log a toolt
     'text: tooltip'          |  - DOM element tooltip property should be
   ],                         |    mapped to the directive text property.
   host: {                    | List which events need to be mapped.
-    (mouseover): 'show()'    |  - Invoke the show() method every time
+    '(mouseover)': 'show()'  |  - Invoke the show() method every time
   }                          |    the mouseover event is fired.
 })                           |
 class Form {                 | Directive controller class, instantiated
                              | when CSS matches.
   text:string;               | text property on the Directive Controller.
                              |
-  show(event) {              | Show method which implements the show action.
+  show() {                   | Show method which implements the show action.
     console.log(this.text);  |
   }
 }
@@ -137,7 +137,7 @@ class Pane {                      | Component controller class
 <div class="outer">
   <h1>{{title}}</h1>
   <div class="inner" [hidden]="!open">
-    <content></content>
+    <ng-content></ng-content>
   </div>
 </div>
 ```
@@ -161,7 +161,7 @@ Example of usage:
 
 ## Directives that use a ViewContainer
 
-Directives that use a ViewContainer can control instantiation of child views which are then inserted into the DOM. (Examples are `ng-if` and `ng-for`.)
+Directives that use a ViewContainer can control instantiation of child views which are then inserted into the DOM. (Examples are `ngIf` and `ngFor`.)
 
 * Every `template` element creates a `ProtoView` which can be used to create Views via the ViewContainer.
 * The child views show up as siblings of the directive in the DOM.
@@ -216,7 +216,7 @@ To better understand the kinds of injections which are supported in Angular we h
 
 ### Injecting Services
 
-Service injection is the most straight forward kind of injection which Angular supports. It involves a component configuring the `viewInjector` or `hostInjector` and then letting the directive ask for the configured service.
+Service injection is the most straight forward kind of injection which Angular supports. It involves a component configuring the `bindings` or `viewBindings` and then letting the directive ask for the configured service.
 
 This example illustrates how to inject `MyService` into `House` directive.
 
@@ -227,7 +227,7 @@ class MyService {}                   | Assume a service which needs to be inject
                                      |
 @Component({                         | Assume a top level application component which
   selector: 'my-app',                | configures the services to be injected.
-  viewInjector: [MyService]           |
+  viewBindings: [MyService]          |
 })                                   |
 @View({                              | Assume we have a template that needs to be
   templateUrl: 'my_app.html',        | configured with directives to be injected.
@@ -260,9 +260,8 @@ Injecting other directives into directives follows a similar mechanism as inject
 
 There are five kinds of visibilities:
 
-* (no annotation): Inject dependant directives only if they are on the current element.
-* `@ancestor`: Inject a directive if it is at any element above the current element.
-* `@parent`: Inject a directive which is a direct parent of the current element.
+* (no annotation): Inject dependent directives only if they are on the current element.
+* `@SkipSelf()`: Inject a directive if it is at any element above the current element.
 * `@child`: Inject a list of direct children which match a given type. (Used with `Query`)
 * `@descendant`: Inject a list of any children which match a given type. (Used with `Query`)
 
@@ -300,8 +299,8 @@ class FieldSet {                     |
 @Directive({ selector: 'field' })    |
 class Field {                        |
   constructor(                       |
-    @ancestor field:Form,            |
-    @parent field:FieldSet,          |
+    @SkipSelf() field:Form,          |
+    @SkipSelf() field:FieldSet,      |
   ) { ... }                          |
 }                                    |
                                      |
@@ -325,7 +324,7 @@ Assume the following DOM structure for `my_app.html`:
 
 #### Shadow DOM effects on Directive DI
 
-Shadow DOM provides an encapsulation for components, so as a general rule it does not allow directive injections to cross the shadow DOM boundaries. To remedy this, declaritively specify the required component as an injectable.
+Shadow DOM provides an encapsulation for components, so as a general rule it does not allow directive injections to cross the shadow DOM boundaries. To remedy this, declaratively specify the required component as an injectable.
 
 ```
 @Component({
@@ -337,7 +336,7 @@ Shadow DOM provides an encapsulation for components, so as a general rule it doe
 })
 class Kid {
   constructor(
-    @Parent() dad:Dad,
+    @SkipSelf() dad:Dad,
     @Optional() grandpa:Grandpa
   ) {
     this.name = 'Billy';
@@ -354,7 +353,7 @@ class Kid {
   directives: [Kid]
 })
 class Dad {
-  constructor(@Parent() dad:Grandpa) {
+  constructor(@SkipSelf() dad:Grandpa) {
     this.name = 'Joe Jr';
     this.dad = dad.name;
   }
@@ -362,7 +361,7 @@ class Dad {
 
 @Component({
   selector: '[grandpa]',
-  viewInjector: []
+  viewBindings: []
 })
 @View({
   templateUrl: 'grandpa.html',

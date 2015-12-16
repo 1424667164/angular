@@ -69,10 +69,10 @@ export class TreeDiffer {
           let relativeFilePath = path.relative(this.rootPath, absolutePath);
 
           switch (this.isFileDirty(absolutePath, pathStat)) {
-            case FileStatus.ADDED:
+            case FileStatus.Added:
               result.addedPaths.push(relativeFilePath);
               break;
-            case FileStatus.CHANGED:
+            case FileStatus.Changed:
               result.changedPaths.push(relativeFilePath);
           }
         }
@@ -94,13 +94,13 @@ export class TreeDiffer {
 
       if (oldFingerprint === newFingerprint) {
         // nothing changed
-        return FileStatus.UNCHANGED;
+        return FileStatus.Unchanged;
       }
 
-      return FileStatus.CHANGED;
+      return FileStatus.Changed;
     }
 
-    return FileStatus.ADDED;
+    return FileStatus.Added;
   }
 
 
@@ -155,8 +155,8 @@ class DirtyCheckingDiffResult extends DiffResult {
                             .concat(this.changedPaths.map(p => `* ${p}`))
                             .concat(this.removedPaths.map(p => `- ${p}`));
     console.log(`Tree diff: ${this}` + ((verbose && prefixedPaths.length) ?
-                                             ` [\n  ${prefixedPaths.join('\n  ')}\n]` :
-                                             ''));
+                                            ` [\n  ${prefixedPaths.join('\n  ')}\n]` :
+                                            ''));
   }
 }
 
@@ -170,7 +170,7 @@ function pad(value, length) {
 
 
 enum FileStatus {
-  ADDED,
-  UNCHANGED,
-  CHANGED
+  Added,
+  Unchanged,
+  Changed
 }

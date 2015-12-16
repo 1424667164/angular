@@ -6,7 +6,7 @@ var ParserUtil = require('./parser_util');
 
 class Profiler {
   private _profiler;
-  private _markerEvents: List<any>;
+  private _markerEvents: any[];
   private _profilerStartTime: number;
 
   constructor() { this._profiler = Cc['@mozilla.org/tools/profiler;1'].getService(Ci.nsIProfiler); }
@@ -27,7 +27,7 @@ class Profiler {
     return perfEvents;
   }
 
-  _mergeMarkerEvents(perfEvents: List<any>): List<any> {
+  _mergeMarkerEvents(perfEvents: any[]): any[] {
     this._markerEvents.forEach(function(markerEvent) { perfEvents.push(markerEvent); });
     return perfEvents;
   }
@@ -54,7 +54,7 @@ mod.PageMod({
   contentScriptFile: data.url('installed_script.js'),
   onAttach: worker => {
     worker.port.on('startProfiler',
-                   (timeStarted) => profiler.start(/* = profiler memory */ 1000000, 1,
+                   (timeStarted) => profiler.start(/* = profiler memory */ 1000000, 0.1,
                                                    ['leaf', 'js', 'stackwalk', 'gc'], timeStarted));
     worker.port.on('stopProfiler', () => profiler.stop());
     worker.port.on('getProfile',

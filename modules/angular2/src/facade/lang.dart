@@ -5,24 +5,19 @@ import 'dart:math' as math;
 import 'dart:convert' as convert;
 import 'dart:async' show Future;
 
+String getTypeNameForDebugging(Type type) => type.toString();
+
 class Math {
   static final _random = new math.Random();
   static int floor(num n) => n.floor();
   static double random() => _random.nextDouble();
 }
 
-int ENUM_INDEX(value) => value.index;
-
 class CONST {
   const CONST();
 }
-class ABSTRACT {
-  const ABSTRACT();
-}
-class IMPLEMENTS {
-  final interfaceClass;
-  const IMPLEMENTS(this.interfaceClass);
-}
+
+const IS_DART = true;
 
 bool isPresent(obj) => obj != null;
 bool isBlank(obj) => obj == null;
@@ -32,8 +27,23 @@ bool isType(obj) => obj is Type;
 bool isStringMap(obj) => obj is Map;
 bool isArray(obj) => obj is List;
 bool isPromise(obj) => obj is Future;
+bool isNumber(obj) => obj is num;
+bool isDate(obj) => obj is DateTime;
 
 String stringify(obj) => obj.toString();
+
+int serializeEnum(val) {
+  return val.index;
+}
+
+/**
+ * Deserializes an enum
+ * val should be the indexed value of the enum (sa returned from @Link{serializeEnum})
+ * values should be a map from indexes to values for the enum that you want to deserialize.
+ */
+dynamic deserializeEnum(num val, Map<num, dynamic> values) {
+  return values[val];
+}
 
 class StringWrapper {
   static String fromCharCode(int code) {
@@ -62,6 +72,30 @@ class StringWrapper {
     return s == s2;
   }
 
+  static String stripLeft(String s, String charVal) {
+    if (isPresent(s) && s.length > 0) {
+      var pos = 0;
+      for (var i = 0; i < s.length; i++) {
+        if (s[i] != charVal) break;
+        pos++;
+      }
+      s = s.substring(pos);
+    }
+    return s;
+  }
+
+  static String stripRight(String s, String charVal) {
+    if (isPresent(s) && s.length > 0) {
+      var pos = s.length;
+      for (var i = s.length - 1; i >= 0; i--) {
+        if (s[i] != charVal) break;
+        pos--;
+      }
+      s = s.substring(0, pos);
+    }
+    return s;
+  }
+
   static String replace(String s, Pattern from, String replace) {
     return s.replaceFirst(from, replace);
   }
@@ -70,19 +104,13 @@ class StringWrapper {
     return s.replaceAll(from, replace);
   }
 
-  static String toUpperCase(String s) {
-    return s.toUpperCase();
-  }
-
-  static String toLowerCase(String s) {
-    return s.toLowerCase();
-  }
-
-  static startsWith(String s, String start) {
-    return s.startsWith(start);
-  }
-
-  static String substring(String s, int start, [int end]) {
+  static String slice(String s, [int start = 0, int end]) {
+    start = _startOffset(s, start);
+    end = _endOffset(s, end);
+    //in JS if start > end an empty string is returned
+    if (end != null && start > end) {
+      return "";
+    }
     return s.substring(start, end);
   }
 
@@ -92,6 +120,23 @@ class StringWrapper {
 
   static bool contains(String s, String substr) {
     return s.contains(substr);
+  }
+
+  static int compare(String a, String b) => a.compareTo(b);
+
+  // JS slice function can take start < 0 which indicates a position relative to
+  // the end of the string
+  static int _startOffset(String s, int start) {
+    int len = s.length;
+    return start < 0 ? math.max(len + start, 0) : math.min(start, len);
+  }
+
+  // JS slice function can take end < 0 which indicates a position relative to
+  // the end of the string
+  static int _endOffset(String s, int end) {
+    int len = s.length;
+    if (end == null) return len;
+    return end < 0 ? math.max(len + end, 0) : math.min(end, len);
   }
 }
 
@@ -140,12 +185,15 @@ class RegExpWrapper {
     return new RegExp(regExpStr,
         multiLine: multiLine, caseSensitive: caseSensitive);
   }
+
   static Match firstMatch(RegExp regExp, String input) {
     return regExp.firstMatch(input);
   }
+
   static bool test(RegExp regExp, String input) {
     return regExp.hasMatch(input);
   }
+
   static Iterator<Match> matcher(RegExp regExp, String input) {
     return regExp.allMatches(input).iterator;
   }
@@ -176,21 +224,11 @@ class FunctionWrapper {
   }
 }
 
-class BaseException extends Error {
-  final String message;
-  final originalException;
-  final originalStack;
-
-  BaseException([this.message, this.originalException, this.originalStack]);
-
-  String toString() {
-    return this.message;
-  }
-}
-
 const _NAN_KEY = const Object();
 
-// Dart can have identical(str1, str2) == false while str1 == str2
+// Dart can have identical(str1, str2) == false while str1 == str2. Moreover,
+// after compiling with dart2js identical(str1, str2) might return true.
+// (see dartbug.com/22496 for details).
 bool looseIdentical(a, b) =>
     a is String && b is String ? a == b : identical(a, b);
 
@@ -200,9 +238,8 @@ dynamic getMapKey(value) {
   return value.isNaN ? _NAN_KEY : value;
 }
 
-dynamic normalizeBlank(obj) {
-  return isBlank(obj) ? null : obj;
-}
+// TODO: remove with https://github.com/angular/angular/issues/3055
+dynamic normalizeBlank(obj) => obj;
 
 bool normalizeBool(bool obj) {
   return isBlank(obj) ? false : obj;
@@ -212,13 +249,38 @@ bool isJsObject(o) {
   return false;
 }
 
-bool assertionsEnabled() {
-  try {
-    assert(false);
-    return false;
-  } catch (e) {
-    return true;
+bool _forceDevMode = true;
+bool _modeLocked = false;
+
+void lockMode() {
+  _modeLocked = true;
+}
+
+@deprecated
+void enableDevMode() {
+  if (_forceDevMode) {
+    return;
   }
+  if (_modeLocked) {
+    throw new Exception("Cannot enable dev mode after platform setup.");
+  }
+  _forceDevMode = true;
+}
+
+void enableProdMode() {
+  if (_forceDevMode) {
+    return;
+  }
+  if (_modeLocked) {
+    throw new Exception("Cannot enable prod mode after platform setup.");
+  }
+  _forceDevMode = false;
+}
+
+bool assertionsEnabled() {
+  var k = false;
+  assert((k = true));
+  return _forceDevMode || k;
 }
 
 // Can't be all uppercase as our transpiler would think it is a special directive...
@@ -231,16 +293,33 @@ class Json {
 }
 
 class DateWrapper {
-  static DateTime fromMillis(int ms) {
-    return new DateTime.fromMillisecondsSinceEpoch(ms);
+  static DateTime create(int year,
+      [int month = 1,
+      int day = 1,
+      int hour = 0,
+      int minutes = 0,
+      int seconds = 0,
+      int milliseconds = 0]) {
+    return new DateTime(year, month, day, hour, minutes, seconds, milliseconds);
   }
+
+  static DateTime fromISOString(String str) {
+    return DateTime.parse(str);
+  }
+
+  static DateTime fromMillis(int ms) {
+    return new DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
+  }
+
   static int toMillis(DateTime date) {
     return date.millisecondsSinceEpoch;
   }
+
   static DateTime now() {
     return new DateTime.now();
   }
-  static toJson(DateTime date) {
+
+  static String toJson(DateTime date) {
     return date.toUtc().toIso8601String();
   }
 }

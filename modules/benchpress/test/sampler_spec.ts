@@ -9,17 +9,9 @@ import {
   inject,
   it,
   xit,
-} from 'angular2/test_lib';
+} from 'angular2/testing_internal';
 
-import {
-  isBlank,
-  isPresent,
-  BaseException,
-  stringify,
-  Date,
-  DateWrapper
-} from 'angular2/src/facade/lang';
-import {ListWrapper, List} from 'angular2/src/facade/collection';
+import {isBlank, isPresent, stringify, Date, DateWrapper} from 'angular2/src/facade/lang';
 import {PromiseWrapper, Promise} from 'angular2/src/facade/async';
 
 import {
@@ -29,6 +21,7 @@ import {
   Metric,
   Reporter,
   bind,
+  provide,
   Injector,
   Options,
   MeasureValues
@@ -59,13 +52,13 @@ export function main() {
         driver = new MockDriverAdapter([]);
       }
       var bindings = [
-        Options.DEFAULT_BINDINGS,
+        Options.DEFAULT_PROVIDERS,
         Sampler.BINDINGS,
-        bind(Metric).toValue(metric),
-        bind(Reporter).toValue(reporter),
-        bind(WebDriverAdapter).toValue(driver),
+        provide(Metric, {useValue: metric}),
+        provide(Reporter, {useValue: reporter}),
+        provide(WebDriverAdapter, {useValue: driver}),
         bind(Options.EXECUTE).toValue(execute),
-        bind(Validator).toValue(validator),
+        provide(Validator, {useValue: validator}),
         bind(Options.NOW).toValue(() => DateWrapper.fromMillis(time++))
       ];
       if (isPresent(prepare)) {
@@ -251,7 +244,7 @@ function createCountingMetric(log = null) {
 }
 
 class MockDriverAdapter extends WebDriverAdapter {
-  private _log: List<any>;
+  private _log: any[];
   private _waitFor: Function;
   constructor(log = null, waitFor = null) {
     super();
@@ -272,7 +265,7 @@ class MockDriverAdapter extends WebDriverAdapter {
 
 
 class MockValidator extends Validator {
-  private _log: List<any>;
+  private _log: any[];
   constructor(log = null, private _validate: Function = null) {
     super();
     if (isBlank(log)) {
@@ -280,7 +273,7 @@ class MockValidator extends Validator {
     }
     this._log = log;
   }
-  validate(completeSample: List<MeasureValues>): List<MeasureValues> {
+  validate(completeSample: MeasureValues[]): MeasureValues[] {
     var stableSample = isPresent(this._validate) ? this._validate(completeSample) : completeSample;
     this._log.push(['validate', completeSample, stableSample]);
     return stableSample;
@@ -288,7 +281,7 @@ class MockValidator extends Validator {
 }
 
 class MockMetric extends Metric {
-  private _log: List<any>;
+  private _log: any[];
   constructor(log = null, private _endMeasure: Function = null) {
     super();
     if (isBlank(log)) {
@@ -308,7 +301,7 @@ class MockMetric extends Metric {
 }
 
 class MockReporter extends Reporter {
-  _log: List<any>;
+  _log: any[];
   constructor(log = null) {
     super();
     if (isBlank(log)) {

@@ -1,13 +1,12 @@
 import {isPresent} from 'angular2/src/facade/lang';
-import {getIntParameter, bindAction} from 'angular2/src/test_lib/benchmark_util';
+import {getIntParameter, bindAction} from 'angular2/src/testing/benchmark_util';
 import {TimerWrapper} from 'angular2/src/facade/async';
-import {List, ListWrapper} from 'angular2/src/facade/collection';
 import {ScrollAreaComponent} from './scroll_area';
-import {NgIf, NgFor} from 'angular2/directives';
-import {DOM} from 'angular2/src/dom/dom_adapter';
+import {NgIf, NgFor} from 'angular2/common';
+import {DOM} from 'angular2/src/platform/dom/dom_adapter';
 import {document} from 'angular2/src/facade/browser';
 
-import {Component, Directive, View} from 'angular2/angular2';
+import {Component, Directive, View} from 'angular2/core';
 
 
 @Component({selector: 'scroll-app'})
@@ -18,16 +17,16 @@ import {Component, Directive, View} from 'angular2/angular2';
     <div style="display: flex">
       <scroll-area id="testArea"></scroll-area>
     </div>
-    <div template="ng-if scrollAreas.length > 0">
+    <div template="ngIf scrollAreas.length > 0">
       <p>Following tables are only here to add weight to the UI:</p>
-      <scroll-area template="ng-for #scrollArea of scrollAreas"></scroll-area>
+      <scroll-area template="ngFor #scrollArea of scrollAreas"></scroll-area>
     </div>
   </div>`
 })
 export class App {
-  scrollAreas: List<int>;
-  iterationCount: int;
-  scrollIncrement: int;
+  scrollAreas: number[];
+  iterationCount: number;
+  scrollIncrement: number;
 
   constructor() {
     var appSize = getIntParameter('appSize');
@@ -50,7 +49,7 @@ export class App {
 
   runBenchmark() {
     var scrollDiv = this._getScrollDiv();
-    var n: int = this.iterationCount;
+    var n: number = this.iterationCount;
     var scheduleScroll;
     scheduleScroll = () => {
       TimerWrapper.setTimeout(() => {

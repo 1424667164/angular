@@ -9,12 +9,19 @@ import {
   inject,
   it,
   xit,
-} from 'angular2/test_lib';
+} from 'angular2/testing_internal';
 
 import {DateWrapper, Json, RegExpWrapper, isPresent} from 'angular2/src/facade/lang';
 import {PromiseWrapper} from 'angular2/src/facade/async';
 
-import {bind, Injector, SampleDescription, MeasureValues, Options} from 'benchpress/common';
+import {
+  bind,
+  provide,
+  Injector,
+  SampleDescription,
+  MeasureValues,
+  Options
+} from 'benchpress/common';
 
 
 import {JsonFileReporter} from 'benchpress/src/reporter/json_file_reporter';
@@ -26,7 +33,8 @@ export function main() {
     function createReporter({sampleId, descriptions, metrics, path}) {
       var bindings = [
         JsonFileReporter.BINDINGS,
-        bind(SampleDescription).toValue(new SampleDescription(sampleId, descriptions, metrics)),
+        provide(SampleDescription,
+                {useValue: new SampleDescription(sampleId, descriptions, metrics)}),
         bind(JsonFileReporter.PATH).toValue(path),
         bind(Options.NOW).toValue(() => DateWrapper.fromMillis(1234)),
         bind(Options.WRITE_FILE)
@@ -47,7 +55,7 @@ export function main() {
          })
              .reportSample([mv(0, 0, {'a': 3, 'b': 6})],
                            [mv(0, 0, {'a': 3, 'b': 6}), mv(1, 1, {'a': 5, 'b': 9})]);
-         var regExp = RegExpWrapper.create('somePath/someId_\\d+\\.json');
+         var regExp = /somePath\/someId_\d+\.json/g;
          expect(isPresent(RegExpWrapper.firstMatch(regExp, loggedFile['filename']))).toBe(true);
          var parsedContent = Json.parse(loggedFile['content']);
          expect(parsedContent)

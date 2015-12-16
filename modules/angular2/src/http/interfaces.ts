@@ -1,17 +1,9 @@
-/// <reference path="../../typings/rx/rx.d.ts" />
-
-import {
-  ReadyStates,
-  RequestModesOpts,
-  RequestMethods,
-  RequestCacheOpts,
-  RequestCredentialsOpts,
-  ResponseTypes
-} from './enums';
+import {ReadyState, RequestMethod, ResponseType} from './enums';
 import {Headers} from './headers';
-import {BaseException} from 'angular2/src/facade/lang';
+import {BaseException, WrappedException} from 'angular2/src/facade/exceptions';
 import {EventEmitter} from 'angular2/src/facade/async';
 import {Request} from './static_request';
+import {URLSearchParams} from './url_search_params';
 
 /**
  * Abstract class from which real backends are derived.
@@ -19,46 +11,45 @@ import {Request} from './static_request';
  * The primary purpose of a `ConnectionBackend` is to create new connections to fulfill a given
  * {@link Request}.
  */
-export class ConnectionBackend {
-  constructor() {}
-  createConnection(request: any): Connection { throw new BaseException('Abstract!'); }
-}
+export abstract class ConnectionBackend { abstract createConnection(request: any): Connection; }
 
 /**
  * Abstract class from which real connections are derived.
  */
-export class Connection {
-  readyState: ReadyStates;
+export abstract class Connection {
+  readyState: ReadyState;
   request: Request;
-  response: EventEmitter;  // TODO: generic of <Response>;
-  dispose(): void { throw new BaseException('Abstract!'); }
+  response: any;  // TODO: generic of <Response>;
 }
 
 /**
- * Interface for options to construct a Request, based on
+ * Interface for options to construct a RequestOptions, based on
  * [RequestInit](https://fetch.spec.whatwg.org/#requestinit) from the Fetch spec.
  */
-export interface IRequestOptions {
+export interface RequestOptionsArgs {
   url?: string;
-  method?: RequestMethods;
+  method?: string | RequestMethod;
+  search?: string | URLSearchParams;
   headers?: Headers;
   // TODO: Support Blob, ArrayBuffer, JSON, URLSearchParams, FormData
   body?: string;
-  mode?: RequestModesOpts;
-  credentials?: RequestCredentialsOpts;
-  cache?: RequestCacheOpts;
 }
+
+/**
+ * Required structure when constructing new Request();
+ */
+export interface RequestArgs extends RequestOptionsArgs { url: string; }
 
 /**
  * Interface for options to construct a Response, based on
  * [ResponseInit](https://fetch.spec.whatwg.org/#responseinit) from the Fetch spec.
  */
-export interface IResponseOptions {
+export type ResponseOptionsArgs = {
   // TODO: Support Blob, ArrayBuffer, JSON
   body?: string | Object | FormData;
   status?: number;
   statusText?: string;
   headers?: Headers;
-  type?: ResponseTypes;
+  type?: ResponseType;
   url?: string;
 }

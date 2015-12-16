@@ -7,7 +7,7 @@ authors:
 description: Angular2 benchmarks
 homepage: <%= packageJson.homepage %>
 environment:
-  sdk: '>=1.10.0-dev.1.10 <2.0.0'
+  sdk: '>=1.10.0 <2.0.0'
 dependencies:
   angular2: '^<%= packageJson.version %>'
   browser: '^0.10.0'
@@ -23,8 +23,8 @@ transformers:
         - web/src/element_injector/element_injector_benchmark.dart
         - web/src/largetable/largetable_benchmark.dart
         - web/src/naive_infinite_scroll/index.dart
+        - web/src/static_tree/tree_benchmark.dart
         - web/src/tree/tree_benchmark.dart
-    generate_change_detectors: false
 - $dart2js:
     minify: false
     commandLineOptions:

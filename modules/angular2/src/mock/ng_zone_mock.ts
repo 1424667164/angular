@@ -1,9 +1,25 @@
+import {Injectable} from 'angular2/src/core/di';
 import {NgZone} from 'angular2/src/core/zone/ng_zone';
+import {EventEmitter, ObservableWrapper} from 'angular2/src/facade/async';
 
+/**
+ * A mock implementation of {@link NgZone}.
+ */
+@Injectable()
 export class MockNgZone extends NgZone {
-  constructor() { super({enableLongStackTrace: false}); }
+  /** @internal */
+  _mockOnEventDone: EventEmitter<any>;
 
-  run(fn): any { return fn(); }
+  constructor() {
+    super({enableLongStackTrace: false});
+    this._mockOnEventDone = new EventEmitter<any>(false);
+  }
 
-  runOutsideAngular(fn): any { return fn(); }
+  get onEventDone() { return this._mockOnEventDone; }
+
+  run(fn: Function): any { return fn(); }
+
+  runOutsideAngular(fn: Function): any { return fn(); }
+
+  simulateZoneExit(): void { ObservableWrapper.callNext(this.onEventDone, null); }
 }

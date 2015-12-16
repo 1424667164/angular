@@ -1,9 +1,9 @@
 import {Date, DateWrapper} from 'angular2/src/facade/lang';
-import {StringMap, Map} from 'angular2/src/facade/collection';
+import {Map} from 'angular2/src/facade/collection';
 
 export class MeasureValues {
   constructor(public runIndex: number, public timeStamp: Date,
-              public values: StringMap<string, any>) {}
+              public values: {[key: string]: any}) {}
 
   toJson() {
     return {

@@ -13,11 +13,29 @@ import ts2dart from '../broccoli-ts2dart';
 import dartfmt from '../broccoli-dartfmt';
 import replace from '../broccoli-replace';
 
+var global_excludes = [
+  'angular2/http*',
+  'angular2/upgrade*',
+  'angular2/examples/**/ts/**/*',
+  'angular2/http/**/*',
+  'angular2/src/http/**/*',
+  'angular2/test/http/**/*',
+  'angular2/src/upgrade/**/*',
+  'angular2/test/upgrade/**/*',
+  'playground/src/http/**/*',
+  'playground/test/http/**/*',
+  'playground/src/jsonp/**/*',
+  'playground/test/jsonp/**/*'
+];
+
+
 /**
  * A funnel starting at modules, including the given filters, and moving into the root.
  * @param include Include glob filters.
  */
 function modulesFunnel(include: string[], exclude?: string[]) {
+  exclude = exclude || [];
+  exclude = exclude.concat(global_excludes);
   return new Funnel('modules', {include, destDir: '/', exclude});
 }
 
@@ -43,15 +61,15 @@ function stripModulePrefix(relativePath: string): string {
 }
 
 function getSourceTree() {
-  // Transpile everything in 'modules' except for rtts_assertions.
-  var tsInputTree = modulesFunnel(['**/*.js', '**/*.ts', '**/*.dart'], ['rtts_assert/**/*']);
+  var tsInputTree = modulesFunnel(['**/*.js', '**/*.ts', '**/*.dart'], ['angular1_router/**/*']);
   var transpiled = ts2dart(tsInputTree, {
     generateLibraryName: true,
     generateSourceMap: false,
     translateBuiltins: true,
   });
   // Native sources, dart only examples, etc.
-  var dartSrcs = modulesFunnel(['**/*.dart', '**/*.ng_meta.json', '**/css/**']);
+  var dartSrcs = modulesFunnel(
+      ['**/*.dart', '**/*.ng_meta.json', '**/*.aliases.json', '**/css/**', '**/*.css']);
   return mergeTrees([transpiled, dartSrcs]);
 }
 
@@ -64,8 +82,8 @@ function fixDartFolderLayout(sourceTree) {
       {pattern: /^benchmarks\//, insertion: 'web'},
       {pattern: /^benchmarks_external\/test\//, insertion: ''},
       {pattern: /^benchmarks_external\//, insertion: 'web'},
-      {pattern: /^examples\/test\//, insertion: ''},
-      {pattern: /^examples\//, insertion: 'web/'},
+      {pattern: /^playground\/test\//, insertion: ''},
+      {pattern: /^playground\//, insertion: 'web/'},
       {pattern: /^[^\/]*\/test\//, insertion: ''},
       {pattern: /^./, insertion: 'lib'},  // catch all.
     ];
@@ -100,7 +118,7 @@ function getHtmlSourcesTree() {
 
 function getExamplesJsonTree() {
   // Copy JSON files
-  return modulesFunnel(['examples/**/*.json']);
+  return modulesFunnel(['playground/**/*.json']);
 }
 
 
@@ -114,14 +132,7 @@ function getTemplatedPubspecsTree() {
     license: BASE_PACKAGE_JSON.license,
     contributors: BASE_PACKAGE_JSON.contributors,
     dependencies: BASE_PACKAGE_JSON.dependencies,
-    devDependencies: {
-      "yargs": BASE_PACKAGE_JSON.devDependencies['yargs'],
-      "gulp-sourcemaps": BASE_PACKAGE_JSON.devDependencies['gulp-sourcemaps'],
-      "gulp-traceur": BASE_PACKAGE_JSON.devDependencies['gulp-traceur'],
-      "gulp": BASE_PACKAGE_JSON.devDependencies['gulp'],
-      "gulp-rename": BASE_PACKAGE_JSON.devDependencies['gulp-rename'],
-      "through2": BASE_PACKAGE_JSON.devDependencies['through2']
-    }
+    devDependencies: {}
   };
   // Generate pubspec.yaml from templates.
   var pubspecs = modulesFunnel(['**/pubspec.yaml']);
@@ -134,7 +145,7 @@ function getDocsTree() {
   var licenses = new MultiCopy('', {
     srcPath: 'LICENSE',
     targetPatterns: ['modules/*'],
-    exclude: ['*/rtts_assert'],  // Not in dart.
+    exclude: ['*/angular2/src/http', '*/upgrade', '*/angular1_router']  // Not in dart.
   });
   licenses = stew.rename(licenses, stripModulePrefix);
 
@@ -144,8 +155,11 @@ function getDocsTree() {
                            relativePath => relativePath.replace(/\.dart\.md$/, '.md'));
   // Copy all assets, ignore .js. and .dart. (handled above).
   var docs = modulesFunnel(['**/*.md', '**/*.png', '**/*.html', '**/*.css', '**/*.scss'],
-                           ['**/*.js.md', '**/*.dart.md']);
-  return mergeTrees([licenses, mdTree, docs]);
+                           ['**/*.js.md', '**/*.dart.md', 'angular1_router/**/*']);
+
+  var assets = modulesFunnel(['playground/**/*.json']);
+
+  return mergeTrees([licenses, mdTree, docs, assets]);
 }
 
 module.exports = function makeDartTree(options: AngularBuilderOptions) {

@@ -1,7 +1,11 @@
 language: node_js
 sudo: false
 node_js:
-- '0.12'
+- '4.2.1'
+
+branches:
+  except:
+    - g3sync
 
 cache:
   directories:
@@ -13,7 +17,13 @@ env:
   - KARMA_BROWSERS=DartiumWithWebPlatform
   - E2E_BROWSERS=Dartium
   - LOGS_DIR=/tmp/angular-build/logs
+  - SAUCE_USERNAME=angular-ci
+  - SAUCE_ACCESS_KEY=9b988f434ff8-fbca-8aa4-4ae3-35442987
+  - BROWSER_STACK_USERNAME=angularteam1
+  - BROWSER_STACK_ACCESS_KEY=BWCd4SynLzdDcv8xtzsB
   - ARCH=linux-x64
+  - DART_DEV_VERSION=latest
+  - DART_STABLE_VERSION=latest
   # Token for tsd to increase github rate limit
   # See https://github.com/DefinitelyTyped/tsd#tsdrc
   # This does not use http://docs.travis-ci.com/user/environment-variables/#Secure-Variables
@@ -21,50 +31,102 @@ env:
   # This SSO token belongs to github account angular-github-ratelimit-token which has no access
   # (password is in Valentine)
   - TSDRC='{"token":"ef474500309daea53d5991b3079159a29520a40b"}'
+  # GITHUB_TOKEN_ANGULAR
+  - secure: "fq/U7VDMWO8O8SnAQkdbkoSe2X92PVqg4d044HmRYVmcf6YbO48+xeGJ8yOk0pCBwl3ISO4Q2ot0x546kxfiYBuHkZetlngZxZCtQiFT9kyId8ZKcYdXaIW9OVdw3Gh3tQyUwDucfkVhqcs52D6NZjyE2aWZ4/d1V4kWRO/LMgo="
   matrix:
-  - MODE=js DART_CHANNEL=dev
-  - MODE=dart DART_CHANNEL=stable
-  # Deactivate dev mode for Dart as there are breaking changes.
-  # Reactivate when https://github.com/angular/angular/issues/2798 is fixed!
-  # (Note: we need the dev channel as Google3 is close to it and ahead of stable channel)
-  # - MODE=dart DART_CHANNEL=dev
+    # Order: a slower build first, so that we don't occupy an idle travis worker waiting for others to complete.
+    - MODE=dart DART_CHANNEL=stable DART_VERSION=$DART_STABLE_VERSION
+    - MODE=dart DART_CHANNEL=dev DART_VERSION=$DART_DEV_VERSION
+    - MODE=saucelabs DART_CHANNEL=dev DART_VERSION=$DART_DEV_VERSION
+    - MODE=browserstack DART_CHANNEL=dev DART_VERSION=$DART_DEV_VERSION
+    - MODE=dart_experimental DART_CHANNEL=dev DART_VERSION=$DART_DEV_VERSION
+    - MODE=js DART_CHANNEL=dev DART_VERSION=$DART_DEV_VERSION
+    - MODE=router DART_CHANNEL=dev DART_VERSION=$DART_DEV_VERSION
+    - MODE=build_only DART_CHANNEL=stable DART_VERSION=$DART_STABLE_VERSION
+    - MODE=lint DART_CHANNEL=dev DART_VERSION=$DART_DEV_VERSION
+    - MODE=payload DART_CHANNEL=stable DART_VERSION=$DART_STABLE_VERSION
+
+matrix:
+  allow_failures:
+  - env: "MODE=saucelabs DART_CHANNEL=dev DART_VERSION=$DART_DEV_VERSION"
+  - env: "MODE=browserstack DART_CHANNEL=dev DART_VERSION=$DART_DEV_VERSION"
+  - env: "MODE=dart_experimental DART_CHANNEL=dev DART_VERSION=$DART_DEV_VERSION"
+  # TODO(alxhub): remove when dartdoc #1039 is in dev channel
+  - env: "MODE=dart DART_CHANNEL=dev DART_VERSION=$DART_DEV_VERSION"
 
 addons:
   firefox: "38.0"
 
 before_install:
+- node tools/analytics/build-analytics start ci job
+- node tools/analytics/build-analytics start ci before_install
 - echo ${TSDRC} > .tsdrc
 - export DISPLAY=:99.0
 - export GIT_SHA=$(git rev-parse HEAD)
 - ./scripts/ci/init_android.sh
-- ./scripts/ci/install_dart.sh ${DART_CHANNEL} ${ARCH}
+- ./scripts/ci/install_dart.sh ${DART_CHANNEL} ${DART_VERSION} ${ARCH}
 - sh -e /etc/init.d/xvfb start
 - if [[ -e SKIP_TRAVIS_TESTS ]]; then { cat SKIP_TRAVIS_TESTS ; exit 0; } fi
+- '[ "${TRAVIS_PULL_REQUEST}" = "false" ] && [ "${TRAVIS_BRANCH}" = "master" ] && SAUCE_USERNAME="angular2-ci" && SAUCE_ACCESS_KEY="693ebc16208a-0b5b-1614-8d66-a2662f4e" || true'
+- node tools/analytics/build-analytics success ci before_install
 
 install:
-  # Update npm
-  - npm install -g npm@2.9.1
-  - npm --version
+  - node tools/analytics/build-analytics start ci install
   # Check the size of caches
   - du -sh ./node_modules || true
   # Install npm dependecies
   - npm install
+  - node tools/analytics/build-analytics success ci install
 
 before_script:
+- node tools/analytics/build-analytics start ci before_script
 - mkdir -p $LOGS_DIR
+- ./scripts/ci/presubmit-queue-setup.sh
+- node tools/analytics/build-analytics success ci before_script
 
 script:
+- node tools/analytics/build-analytics start ci script
 - ./scripts/ci/build_and_test.sh ${MODE}
+- node tools/analytics/build-analytics success ci script
 
 after_script:
+- node tools/analytics/build-analytics start ci after_script
 - ./scripts/ci/print-logs.sh
+- ./scripts/ci/after-script.sh
+- ./scripts/publish/publish-build-artifacts.sh
+- node tools/analytics/build-analytics success ci after_script
+- if [[ $TRAVIS_TEST_RESULT -eq 0 ]]; then node tools/analytics/build-analytics success ci job; else node tools/analytics/build-analytics error ci job; fi
 
 notifications:
   webhooks:
     urls:
     - https://webhooks.gitter.im/e/1ef62e23078036f9cee4
-    on_success: change  # options: [always|never|change] default: always
+    # trigger Buildtime Trend Service to parse Travis CI log
+    - https://buildtimetrend.herokuapp.com/travis
+    on_success: always  # options: [always|never|change] default: always
     on_failure: always  # options: [always|never|change] default: always
     on_start: false     # default: false
   slack:
     secure: EP4MzZ8JMyNQJ4S3cd5LEPWSMjC7ZRdzt3veelDiOeorJ6GwZfCDHncR+4BahDzQAuqyE/yNpZqaLbwRWloDi15qIUsm09vgl/1IyNky1Sqc6lEknhzIXpWSalo4/T9ZP8w870EoDvM/UO+LCV99R3wS8Nm9o99eLoWVb2HIUu0=
+
+deploy:
+  - provider: gcs
+    # This is for project angular-github-babysitter
+    access_key_id: GOOGIOQTDBEOPBUAWFZQ
+    secret_access_key:
+      secure: "MEDggllZ5fw4wI9CEUi8WR6jKsKXqdRF/DLxSNC2JpzM5RlVeBm0uqjntYT1Cf1dASvQ2/+vZCUikL/3A48NcoEYRHXGmxu8D6t/SvleQD8Xv434xFOdsa2QqP/HiCtqCLOI5jJz1JVoB5nNyKKZ33ogTUL1LV1TfcrAioyizW8="
+    # this bucket has a lifecycle to delete after 90 days:
+    # $ echo '{"rule": [{"action": {"type": "Delete"}, "condition": {"age": 90}}]}' > lifecycle.json
+    # $ gsutil lifecycle set lifecycle.json gs://angular2-snapshots
+    bucket: angular2-snapshots
+    # don't delete generated files
+    skip_cleanup: true
+    # serve to public at https://storage.googleapis.com/angular2-snapshots/SHA/dist.tgz
+    acl: public-read
+    # upload the .tgz archive created in scripts/ci/build_and_test.sh
+    local-dir: deploy
+    # create a "subdirectory" for each commit
+    upload-dir: $TRAVIS_COMMIT
+    on:
+      repo: angular/angular
+      condition: "$MODE = build_only"

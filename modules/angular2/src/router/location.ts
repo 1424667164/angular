@@ -1,76 +1,130 @@
 import {LocationStrategy} from './location_strategy';
-import {StringWrapper, isPresent, CONST_EXPR} from 'angular2/src/facade/lang';
 import {EventEmitter, ObservableWrapper} from 'angular2/src/facade/async';
-import {OpaqueToken, Injectable, Optional, Inject} from 'angular2/di';
-
-export const appBaseHrefToken: OpaqueToken = CONST_EXPR(new OpaqueToken('locationHrefToken'));
+import {Injectable, Inject} from 'angular2/core';
 
 /**
- * This is the service that an application developer will directly interact with.
+ * `Location` is a service that applications can use to interact with a browser's URL.
+ * Depending on which {@link LocationStrategy} is used, `Location` will either persist
+ * to the URL's path or the URL's hash segment.
  *
- * Responsible for normalizing the URL against the application's base href.
+ * Note: it's better to use {@link Router#navigate} service to trigger route changes. Use
+ * `Location` only if you need to interact with or create normalized URLs outside of
+ * routing.
+ *
+ * `Location` is responsible for normalizing the URL against the application's base href.
  * A normalized URL is absolute from the URL host, includes the application's base href, and has no
  * trailing slash:
  * - `/my/app/user/123` is normalized
  * - `my/app/user/123` **is not** normalized
  * - `/my/app/user/123/` **is not** normalized
+ *
+ * ### Example
+ *
+ * ```
+ * import {Component} from 'angular2/core';
+ * import {
+ *   ROUTER_DIRECTIVES,
+ *   ROUTER_PROVIDERS,
+ *   RouteConfig,
+ *   Location
+ * } from 'angular2/router';
+ *
+ * @Component({directives: [ROUTER_DIRECTIVES]})
+ * @RouteConfig([
+ *  {...},
+ * ])
+ * class AppCmp {
+ *   constructor(location: Location) {
+ *     location.go('/foo');
+ *   }
+ * }
+ *
+ * bootstrap(AppCmp, [ROUTER_PROVIDERS]);
+ * ```
  */
 @Injectable()
 export class Location {
-  private _subject: EventEmitter = new EventEmitter();
-  private _baseHref: string;
+  /** @internal */
+  _subject: EventEmitter<any> = new EventEmitter();
+  /** @internal */
+  _baseHref: string;
 
-  constructor(public _platformStrategy: LocationStrategy,
-              @Optional() @Inject(appBaseHrefToken) href?: string) {
-    this._baseHref = stripTrailingSlash(
-        stripIndexHtml(isPresent(href) ? href : this._platformStrategy.getBaseHref()));
-    this._platformStrategy.onPopState((_) => this._onPopState(_));
+  constructor(public platformStrategy: LocationStrategy) {
+    var browserBaseHref = this.platformStrategy.getBaseHref();
+    this._baseHref = stripTrailingSlash(stripIndexHtml(browserBaseHref));
+    this.platformStrategy.onPopState((ev) => {
+      ObservableWrapper.callEmit(this._subject, {'url': this.path(), 'pop': true, 'type': ev.type});
+    });
   }
 
-  _onPopState(_): void { ObservableWrapper.callNext(this._subject, {'url': this.path()}); }
+  /**
+   * Returns the normalized URL path.
+   */
+  path(): string { return this.normalize(this.platformStrategy.path()); }
 
-  path(): string { return this.normalize(this._platformStrategy.path()); }
-
+  /**
+   * Given a string representing a URL, returns the normalized URL path without leading or
+   * trailing slashes
+   */
   normalize(url: string): string {
-    return stripTrailingSlash(this._stripBaseHref(stripIndexHtml(url)));
+    return stripTrailingSlash(_stripBaseHref(this._baseHref, stripIndexHtml(url)));
   }
 
-  normalizeAbsolutely(url: string): string {
-    if (!url.startsWith('/')) {
+  /**
+   * Given a string representing a URL, returns the platform-specific external URL path.
+   * If the given URL doesn't begin with a leading slash (`'/'`), this method adds one
+   * before normalizing. This method will also add a hash if `HashLocationStrategy` is
+   * used, or the `APP_BASE_HREF` if the `PathLocationStrategy` is in use.
+   */
+  prepareExternalUrl(url: string): string {
+    if (url.length > 0 && !url.startsWith('/')) {
       url = '/' + url;
     }
-    return stripTrailingSlash(this._addBaseHref(url));
+    return this.platformStrategy.prepareExternalUrl(url);
   }
 
-  _stripBaseHref(url: string): string {
-    if (this._baseHref.length > 0 && url.startsWith(this._baseHref)) {
-      return url.substring(this._baseHref.length);
-    }
-    return url;
+  // TODO: rename this method to pushState
+  /**
+   * Changes the browsers URL to the normalized version of the given URL, and pushes a
+   * new item onto the platform's history.
+   */
+  go(path: string, query: string = ''): void {
+    this.platformStrategy.pushState(null, '', path, query);
   }
 
-  _addBaseHref(url: string): string {
-    if (!url.startsWith(this._baseHref)) {
-      return this._baseHref + url;
-    }
-    return url;
+  /**
+   * Changes the browsers URL to the normalized version of the given URL, and replaces
+   * the top item on the platform's history stack.
+   */
+  replaceState(path: string, query: string = ''): void {
+    this.platformStrategy.replaceState(null, '', path, query);
   }
 
-  go(url: string): void {
-    var finalUrl = this.normalizeAbsolutely(url);
-    this._platformStrategy.pushState(null, '', finalUrl);
-  }
+  /**
+   * Navigates forward in the platform's history.
+   */
+  forward(): void { this.platformStrategy.forward(); }
 
-  forward(): void { this._platformStrategy.forward(); }
+  /**
+   * Navigates back in the platform's history.
+   */
+  back(): void { this.platformStrategy.back(); }
 
-  back(): void { this._platformStrategy.back(); }
-
-  subscribe(onNext, onThrow = null, onReturn = null): void {
-    ObservableWrapper.subscribe(this._subject, onNext, onThrow, onReturn);
+  /**
+   * Subscribe to the platform's `popState` events.
+   */
+  subscribe(onNext: (value: any) => void, onThrow: (exception: any) => void = null,
+            onReturn: () => void = null): Object {
+    return ObservableWrapper.subscribe(this._subject, onNext, onThrow, onReturn);
   }
 }
 
-
+function _stripBaseHref(baseHref: string, url: string): string {
+  if (baseHref.length > 0 && url.startsWith(baseHref)) {
+    return url.substring(baseHref.length);
+  }
+  return url;
+}
 
 function stripIndexHtml(url: string): string {
   if (/\/index.html$/g.test(url)) {

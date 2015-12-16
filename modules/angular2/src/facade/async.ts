@@ -1,126 +1,164 @@
-/// <reference path="../../typings/es6-promise/es6-promise.d.ts" />
-/// <reference path="../../typings/rx/rx.d.ts" />
+import {global, isPresent, noop} from 'angular2/src/facade/lang';
+// We make sure promises are in a separate file so that we can use promises
+// without depending on rxjs.
+import {Promise} from 'angular2/src/facade/promise';
+export {PromiseWrapper, Promise, PromiseCompleter} from 'angular2/src/facade/promise';
 
-import {global, isPresent} from 'angular2/src/facade/lang';
-import {List} from 'angular2/src/facade/collection';
-import * as Rx from 'rx';
+import {Observable} from 'rxjs/Observable';
+import {Subject} from 'rxjs/Subject';
+import {Subscription} from 'rxjs/Subscription';
+import {Operator} from 'rxjs/Operator';
 
-export var Promise = (<any>global).Promise;
+import {PromiseObservable} from 'rxjs/observable/fromPromise';
+import {toPromise} from 'rxjs/operator/toPromise';
 
-export interface PromiseCompleter<R> {
-  promise: Promise<R>;
-  resolve: (value?: R | Thenable<R>) => void;
-  reject: (error?: any, stackTrace?: string) => void;
-}
+export {Observable} from 'rxjs/Observable';
+export {Subject} from 'rxjs/Subject';
 
-export class PromiseWrapper {
-  static resolve(obj): Promise<any> { return Promise.resolve(obj); }
-
-  static reject(obj, _): Promise<any> { return Promise.reject(obj); }
-
-  // Note: We can't rename this method into `catch`, as this is not a valid
-  // method name in Dart.
-  static catchError<T>(promise: Promise<T>, onError: (error: any) => T | Thenable<T>): Promise<T> {
-    return promise.catch(onError);
-  }
-
-  static all(promises: List<any>): Promise<any> {
-    if (promises.length == 0) return Promise.resolve([]);
-    return Promise.all(promises);
-  }
-
-  static then<T>(promise: Promise<T>, success: (value: any) => T | Thenable<T>,
-                 rejection?: (error: any, stack?: any) => T | Thenable<T>): Promise<T> {
-    return promise.then(success, rejection);
-  }
-
-  static wrap<T>(computation: () => T): Promise<T> {
-    return new Promise((res, rej) => {
-      try {
-        res(computation());
-      } catch (e) {
-        rej(e);
-      }
-    });
-  }
-
-  static completer(): PromiseCompleter<any> {
-    var resolve;
-    var reject;
-
-    var p = new Promise(function(res, rej) {
-      resolve = res;
-      reject = rej;
-    });
-
-    return {promise: p, resolve: resolve, reject: reject};
-  }
+export namespace NodeJS {
+  export interface Timer {}
 }
 
 export class TimerWrapper {
-  static setTimeout(fn: Function, millis: int): int { return global.setTimeout(fn, millis); }
-  static clearTimeout(id: int): void { global.clearTimeout(id); }
+  static setTimeout(fn: (...args: any[]) => void, millis: number): NodeJS.Timer {
+    return global.setTimeout(fn, millis);
+  }
+  static clearTimeout(id: NodeJS.Timer): void { global.clearTimeout(id); }
 
-  static setInterval(fn: Function, millis: int): int { return global.setInterval(fn, millis); }
-  static clearInterval(id: int): void { global.clearInterval(id); }
+  static setInterval(fn: (...args: any[]) => void, millis: number): NodeJS.Timer {
+    return global.setInterval(fn, millis);
+  }
+  static clearInterval(id: NodeJS.Timer): void { global.clearInterval(id); }
 }
 
 export class ObservableWrapper {
-  static subscribe(emitter: Observable, onNext, onThrow = null, onReturn = null): Object {
-    return emitter.observer({next: onNext, throw: onThrow, return: onReturn});
+  // TODO(vsavkin): when we use rxnext, try inferring the generic type from the first arg
+  static subscribe<T>(emitter: any, onNext: (value: T) => void, onError?: (exception: any) => void,
+                      onComplete: () => void = () => {}): Object {
+    onError = (typeof onError === "function") && onError || noop;
+    onComplete = (typeof onComplete === "function") && onComplete || noop;
+    return emitter.subscribe({next: onNext, error: onError, complete: onComplete});
   }
 
-  static isObservable(obs: any): boolean { return obs instanceof Observable; }
+  static isObservable(obs: any): boolean { return !!obs.subscribe; }
 
-  static dispose(subscription: any) { subscription.dispose(); }
+  /**
+   * Returns whether `obs` has any subscribers listening to events.
+   */
+  static hasSubscribers(obs: EventEmitter<any>): boolean { return obs.observers.length > 0; }
 
-  static callNext(emitter: EventEmitter, value: any) { emitter.next(value); }
+  static dispose(subscription: any) { subscription.unsubscribe(); }
 
-  static callThrow(emitter: EventEmitter, error: any) { emitter.throw(error); }
+  /**
+   * @deprecated - use callEmit() instead
+   */
+  static callNext(emitter: EventEmitter<any>, value: any) { emitter.next(value); }
 
-  static callReturn(emitter: EventEmitter) { emitter.return (null); }
-}
+  static callEmit(emitter: EventEmitter<any>, value: any) { emitter.emit(value); }
 
-// TODO: vsavkin change to interface
-export class Observable {
-  observer(generator: any): Object { return null; }
+  static callError(emitter: EventEmitter<any>, error: any) { emitter.error(error); }
+
+  static callComplete(emitter: EventEmitter<any>) { emitter.complete(); }
+
+  static fromPromise(promise: Promise<any>): Observable<any> {
+    return PromiseObservable.create(promise);
+  }
+
+  static toPromise(obj: Observable<any>): Promise<any> { return toPromise.call(obj); }
 }
 
 /**
+ * Use by directives and components to emit custom Events.
+ *
+ * ### Examples
+ *
+ * In the following example, `Zippy` alternatively emits `open` and `close` events when its
+ * title gets clicked:
+ *
+ * ```
+ * @Component({
+ *   selector: 'zippy',
+ *   template: `
+ *   <div class="zippy">
+ *     <div (click)="toggle()">Toggle</div>
+ *     <div [hidden]="!visible">
+ *       <ng-content></ng-content>
+ *     </div>
+ *  </div>`})
+ * export class Zippy {
+ *   visible: boolean = true;
+ *   @Output() open: EventEmitter<any> = new EventEmitter();
+ *   @Output() close: EventEmitter<any> = new EventEmitter();
+ *
+ *   toggle() {
+ *     this.visible = !this.visible;
+ *     if (this.visible) {
+ *       this.open.emit(null);
+ *     } else {
+ *       this.close.emit(null);
+ *     }
+ *   }
+ * }
+ * ```
+ *
  * Use Rx.Observable but provides an adapter to make it work as specified here:
  * https://github.com/jhusain/observable-spec
  *
  * Once a reference implementation of the spec is available, switch to it.
  */
-export class EventEmitter extends Observable {
-  _subject: Rx.Subject<any>;
-  _immediateScheduler;
+export class EventEmitter<T> extends Subject<T> {
+  /** @internal */
+  _isAsync: boolean;
 
-  constructor() {
+  /**
+   * Creates an instance of [EventEmitter], which depending on [isAsync],
+   * delivers events synchronously or asynchronously.
+   */
+  constructor(isAsync: boolean = true) {
     super();
+    this._isAsync = isAsync;
+  }
 
-    // System creates a different object for import * than Typescript es5 emit.
-    if (Rx.hasOwnProperty('default')) {
-      this._subject = new (<any>Rx).default.Rx.Subject();
-      this._immediateScheduler = (<any>Rx).default.Rx.Scheduler.immediate;
+  emit(value: T) { super.next(value); }
+
+  /**
+   * @deprecated - use .emit(value) instead
+   */
+  next(value: any) { super.next(value); }
+
+  subscribe(generatorOrNext?: any, error?: any, complete?: any): any {
+    let schedulerFn;
+    let errorFn = (err: any) => null;
+    let completeFn = () => null;
+
+    if (generatorOrNext && typeof generatorOrNext === 'object') {
+      schedulerFn = this._isAsync ? (value) => { setTimeout(() => generatorOrNext.next(value)); } :
+                                    (value) => { generatorOrNext.next(value); };
+
+      if (generatorOrNext.error) {
+        errorFn = this._isAsync ? (err) => { setTimeout(() => generatorOrNext.error(err)); } :
+                                  (err) => { generatorOrNext.error(err); };
+      }
+
+      if (generatorOrNext.complete) {
+        completeFn = this._isAsync ? () => { setTimeout(() => generatorOrNext.complete()); } :
+                                     () => { generatorOrNext.complete(); };
+      }
     } else {
-      this._subject = new Rx.Subject<any>();
-      this._immediateScheduler = (<any>Rx.Scheduler).immediate;
+      schedulerFn = this._isAsync ? (value) => { setTimeout(() => generatorOrNext(value)); } :
+                                    (value) => { generatorOrNext(value); };
+
+      if (error) {
+        errorFn =
+            this._isAsync ? (err) => { setTimeout(() => error(err)); } : (err) => { error(err); };
+      }
+
+      if (complete) {
+        completeFn =
+            this._isAsync ? () => { setTimeout(() => complete()); } : () => { complete(); };
+      }
     }
+
+    return super.subscribe(schedulerFn, errorFn, completeFn);
   }
-
-  observer(generator): Rx.IDisposable {
-    return this._subject.observeOn(this._immediateScheduler)
-        .subscribe((value) => { setTimeout(() => generator.next(value)); },
-                   (error) => generator.throw ? generator.throw(error) : null,
-                   () => generator.return ? generator.return () : null);
-  }
-
-  toRx(): Rx.Observable<any> { return this._subject; }
-
-  next(value) { this._subject.onNext(value); }
-
-  throw(error) { this._subject.onError(error); }
-
-  return (value?) { this._subject.onCompleted(); }
 }

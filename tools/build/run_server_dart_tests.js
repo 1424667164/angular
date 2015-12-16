@@ -39,7 +39,7 @@ module.exports = function(gulp, plugins, config) {
 
     var defer = Q.defer();
     var done = defer.makeNodeResolver();
-    console.log('start tests');
+    console.log('start tests:', dir);
     util.processToPromise(spawn('dart', ['-c', relativeMasterTestFile], {
       stdio: 'inherit',
       cwd: dir

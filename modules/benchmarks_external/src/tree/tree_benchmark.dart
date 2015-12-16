@@ -3,7 +3,7 @@ library tree_benchmark_ng10;
 
 import 'package:angular/angular.dart';
 import 'package:angular/application_factory.dart';
-import 'package:angular2/src/test_lib/benchmark_util.dart';
+import 'package:angular2/src/testing/benchmark_util.dart';
 
 setup() {
   var m = new Module()
@@ -50,16 +50,17 @@ main() {
     selector: 'tree',
     map: const {'data': '=>data'},
     template: '<span> {{data.value}}'
-    '<span ng-if="data.right != null"><tree data=data.right></span>'
-    '<span ng-if="data.left != null"><tree data=data.left></span>'
-    '</span>')
+        '<span ng-if="data.right != null"><tree data=data.right></span>'
+        '<span ng-if="data.left != null"><tree data=data.left></span>'
+        '</span>')
 class TreeComponent {
   var data;
 }
 
 buildTree(maxDepth, values, curDepth) {
   if (maxDepth == curDepth) return new TreeNode('');
-  return new TreeNode(values[curDepth],
+  return new TreeNode(
+      values[curDepth],
       buildTree(maxDepth, values, curDepth + 1),
       buildTree(maxDepth, values, curDepth + 1));
 }

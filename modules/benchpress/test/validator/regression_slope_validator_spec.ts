@@ -1,4 +1,13 @@
-import {describe, ddescribe, it, iit, xit, expect, beforeEach, afterEach} from 'angular2/test_lib';
+import {
+  describe,
+  ddescribe,
+  it,
+  iit,
+  xit,
+  expect,
+  beforeEach,
+  afterEach
+} from 'angular2/testing_internal';
 import {Date, DateWrapper} from 'angular2/src/facade/lang';
 import {ListWrapper} from 'angular2/src/facade/collection';
 
@@ -7,6 +16,7 @@ import {
   RegressionSlopeValidator,
   Injector,
   bind,
+  provide,
   MeasureValues
 } from 'benchpress/common';
 

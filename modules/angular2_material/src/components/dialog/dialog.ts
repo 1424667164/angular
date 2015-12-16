@@ -1,20 +1,26 @@
 import {
+  bind,
+  provide,
+  forwardRef,
   Component,
-  Directive,
-  View,
-  Parent,
-  ElementRef,
-  DynamicComponentLoader,
   ComponentRef,
-  DomRenderer
-} from 'angular2/angular2';
-import {bind, Injectable, forwardRef, ResolvedBinding, Injector} from 'angular2/di';
+  Directive,
+  DynamicComponentLoader,
+  ElementRef,
+  Host,
+  Injectable,
+  ResolvedProvider,
+  SkipSelf,
+  Injector,
+  View,
+  ViewEncapsulation
+} from 'angular2/core';
 
 import {ObservableWrapper, Promise, PromiseWrapper} from 'angular2/src/facade/async';
 import {isPresent, Type} from 'angular2/src/facade/lang';
-import {DOM} from 'angular2/src/dom/dom_adapter';
+import {DOM} from 'angular2/src/platform/dom/dom_adapter';
 import {MouseEvent, KeyboardEvent} from 'angular2/src/facade/browser';
-import {KEY_ESC} from 'angular2_material/src/core/constants';
+import {KeyCodes} from 'angular2_material/src/core/key_codes';
 
 // TODO(jelbourn): Opener of dialog can control where it is rendered.
 // TODO(jelbourn): body scrolling is disabled while dialog is open.
@@ -31,18 +37,15 @@ import {KEY_ESC} from 'angular2_material/src/core/constants';
 @Injectable()
 export class MdDialog {
   componentLoader: DynamicComponentLoader;
-  domRenderer: DomRenderer;
 
-  constructor(loader: DynamicComponentLoader, domRenderer: DomRenderer) {
+  constructor(loader: DynamicComponentLoader) {
     this.componentLoader = loader;
-    this.domRenderer = domRenderer;
   }
 
   /**
    * Opens a modal dialog.
    * @param type The component to open.
    * @param elementRef The logical location into which the component will be opened.
-   * @param parentInjector
    * @param options
    * @returns Promise for a reference to the dialog.
    */
@@ -52,7 +55,7 @@ export class MdDialog {
     // Create the dialogRef here so that it can be injected into the content component.
     var dialogRef = new MdDialogRef();
 
-    var bindings = Injector.resolve([bind(MdDialogRef).toValue(dialogRef)]);
+    var bindings = Injector.resolve([provide(MdDialogRef, {useValue: dialogRef})]);
 
     var backdropRefPromise = this._openBackdrop(elementRef, bindings);
 
@@ -64,13 +67,8 @@ export class MdDialog {
           // TODO(jelbourn): Don't use direct DOM access. Need abstraction to create an element
           // directly on the document body (also needed for web workers stuff).
           // Create a DOM node to serve as a physical host element for the dialog.
-          var dialogElement = this.domRenderer.getRootNodes(containerRef.hostView.render)[0];
+          var dialogElement = containerRef.location.nativeElement;
           DOM.appendChild(DOM.query('body'), dialogElement);
-
-          // TODO(jelbourn): Use hostProperties binding to set these once #1539 is fixed.
-          // Configure properties on the host element.
-          DOM.addClass(dialogElement, 'md-dialog');
-          DOM.setAttribute(dialogElement, 'tabindex', '0');
 
           // TODO(jelbourn): Do this with hostProperties (or another rendering abstraction) once
           // ready.
@@ -104,12 +102,12 @@ export class MdDialog {
   }
 
   /** Loads the dialog backdrop (transparent overlay over the rest of the page). */
-  _openBackdrop(elementRef: ElementRef, bindings: ResolvedBinding[]): Promise<ComponentRef> {
+  _openBackdrop(elementRef: ElementRef, bindings: ResolvedProvider[]): Promise<ComponentRef> {
     return this.componentLoader.loadNextToLocation(MdBackdrop, elementRef, bindings)
         .then((componentRef) => {
           // TODO(tbosch): clean this up when we have custom renderers
           // (https://github.com/angular/angular/issues/1807)
-          var backdropElement = this.domRenderer.getRootNodes(componentRef.hostView.render)[0];
+          var backdropElement = componentRef.location.nativeElement;
           DOM.addClass(backdropElement, 'md-backdrop');
           DOM.appendChild(DOM.query('body'), backdropElement);
           return componentRef;
@@ -117,11 +115,11 @@ export class MdDialog {
   }
 
   alert(message: string, okMessage: string): Promise<any> {
-    throw "Not implemented";
+    throw 'Not implemented';
   }
 
   confirm(message: string, okMessage: string, cancelMessage: string): Promise<any> {
-    throw "Not implemented";
+    throw 'Not implemented';
   }
 }
 
@@ -207,10 +205,15 @@ export class MdDialogConfig {
  */
 @Component({
   selector: 'md-dialog-container',
-  host: {'(body:^keydown)': 'documentKeypress($event)'},
+  host: {
+    'class': 'md-dialog',
+    'tabindex': '0',
+    '(body:keydown)': 'documentKeypress($event)',
+  },
 })
 @View({
-  templateUrl: 'angular2_material/src/components/dialog/dialog.html',
+  encapsulation: ViewEncapsulation.None,
+  templateUrl: 'package:angular2_material/src/components/dialog/dialog.html',
   directives: [forwardRef(() => MdDialogContent)]
 })
 class MdDialogContainer {
@@ -230,7 +233,7 @@ class MdDialogContainer {
   }
 
   documentKeypress(event: KeyboardEvent) {
-    if (event.keyCode == KEY_ESC) {
+    if (event.keyCode == KeyCodes.ESCAPE) {
       this.dialogRef.close();
     }
   }
@@ -241,9 +244,11 @@ class MdDialogContainer {
  * location
  * for where the dialog content will be loaded.
  */
-@Directive({selector: 'md-dialog-content'})
+@Directive({
+  selector: 'md-dialog-content',
+})
 class MdDialogContent {
-  constructor(@Parent() dialogContainer: MdDialogContainer, elementRef: ElementRef) {
+  constructor(@Host() @SkipSelf() dialogContainer: MdDialogContainer, elementRef: ElementRef) {
     dialogContainer.contentRef = elementRef;
   }
 }
@@ -251,9 +256,11 @@ class MdDialogContent {
 /** Component for the dialog "backdrop", a transparent overlay over the rest of the page. */
 @Component({
   selector: 'md-backdrop',
-  host: {'(click)': 'onClick()'},
+  host: {
+    '(click)': 'onClick()',
+  },
 })
-@View({template: ''})
+@View({template: '', encapsulation: ViewEncapsulation.None})
 class MdBackdrop {
   dialogRef: MdDialogRef;
 

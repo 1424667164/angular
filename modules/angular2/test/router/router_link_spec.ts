@@ -8,99 +8,141 @@ import {
   expect,
   iit,
   inject,
-  IS_DARTIUM,
-  beforeEachBindings,
+  beforeEachProviders,
   it,
   xit,
-  TestComponentBuilder,
-  proxy,
-  SpyObject,
-  By
-} from 'angular2/test_lib';
+  TestComponentBuilder
+} from 'angular2/testing_internal';
 
-import {IMPLEMENTS, print} from 'angular2/src/facade/lang';
+import {SpyRouter, SpyLocation} from './spies';
 
-import {bind, Component, View} from 'angular2/angular2';
-
-import {Location, Router, RouterLink} from 'angular2/router';
+import {provide, Component, View} from 'angular2/core';
+import {By} from 'angular2/platform/common_dom';
 
 import {
-  DOM
-} from 'angular2/src/dom/dom_adapter'
+  Location,
+  Router,
+  RouteRegistry,
+  RouterLink,
+  RouterOutlet,
+  Route,
+  RouteParams,
+  ComponentInstruction
+} from 'angular2/router';
 
+import {DOM} from 'angular2/src/platform/dom/dom_adapter';
+import {ResolvedInstruction} from 'angular2/src/router/instruction';
 
-    export function
-    main() {
-  describe('router-link directive', function() {
+let dummyInstruction =
+    new ResolvedInstruction(new ComponentInstruction('detail', [], null, null, true, 0), null, {});
 
-    beforeEachBindings(
-        () =>
-            [bind(Location).toValue(makeDummyLocation()), bind(Router).toValue(makeDummyRouter())]);
+export function main() {
+  describe('routerLink directive', function() {
+    var tcb: TestComponentBuilder;
 
+    beforeEachProviders(() => [
+      provide(Location, {useValue: makeDummyLocation()}),
+      provide(Router, {useValue: makeDummyRouter()})
+    ]);
 
-    it('should update a[href] attribute',
-       inject([TestComponentBuilder, AsyncTestCompleter], (tcb, async) => {
+    beforeEach(inject([TestComponentBuilder], (tcBuilder) => { tcb = tcBuilder; }));
+
+    it('should update a[href] attribute', inject([AsyncTestCompleter], (async) => {
 
          tcb.createAsync(TestComponent)
              .then((testComponent) => {
                testComponent.detectChanges();
-               let anchorElement = testComponent.query(By.css('a')).nativeElement;
-               expect(DOM.getAttribute(anchorElement, 'href')).toEqual('/detail');
+               let anchorElement =
+                   testComponent.debugElement.query(By.css('a.detail-view')).nativeElement;
+               expect(DOM.getAttribute(anchorElement, 'href')).toEqual('detail');
                async.done();
              });
        }));
 
 
     it('should call router.navigate when a link is clicked',
-       inject([TestComponentBuilder, AsyncTestCompleter, Router], (tcb, async, router) => {
+       inject([AsyncTestCompleter, Router], (async, router) => {
 
          tcb.createAsync(TestComponent)
              .then((testComponent) => {
                testComponent.detectChanges();
                // TODO: shouldn't this be just 'click' rather than '^click'?
-               testComponent.query(By.css('a')).triggerEventHandler('^click', {});
-               expect(router.spy("navigate")).toHaveBeenCalledWith('/detail');
+               testComponent.debugElement.query(By.css('a.detail-view'))
+                   .triggerEventHandler('click', null);
+               expect(router.spy('navigateByInstruction')).toHaveBeenCalledWith(dummyInstruction);
+               async.done();
+             });
+       }));
+
+    it('should call router.navigate when a link is clicked if target is _self',
+       inject([AsyncTestCompleter, Router], (async, router) => {
+
+         tcb.createAsync(TestComponent)
+             .then((testComponent) => {
+               testComponent.detectChanges();
+               testComponent.debugElement.query(By.css('a.detail-view-self'))
+                   .triggerEventHandler('click', null);
+               expect(router.spy('navigateByInstruction')).toHaveBeenCalledWith(dummyInstruction);
+               async.done();
+             });
+       }));
+
+    it('should NOT call router.navigate when a link is clicked if target is set to other than _self',
+       inject([AsyncTestCompleter, Router], (async, router) => {
+
+         tcb.createAsync(TestComponent)
+             .then((testComponent) => {
+               testComponent.detectChanges();
+               testComponent.debugElement.query(By.css('a.detail-view-blank'))
+                   .triggerEventHandler('click', null);
+               expect(router.spy('navigateByInstruction')).not.toHaveBeenCalled();
                async.done();
              });
        }));
   });
 }
 
+@Component({selector: 'user-cmp'})
+@View({template: "hello {{user}}"})
+class UserCmp {
+  user: string;
+  constructor(params: RouteParams) { this.user = params.get('name'); }
+}
 
 @Component({selector: 'test-component'})
 @View({
   template: `
     <div>
-      <a [router-link]="['/detail']">detail view</a>
+      <a [routerLink]="['/Detail']"
+         class="detail-view">
+           detail view
+      </a>
+      <a [routerLink]="['/Detail']"
+         class="detail-view-self"
+         target="_self">
+           detail view with _self target
+      </a>
+      <a [routerLink]="['/Detail']"
+         class="detail-view-blank"
+         target="_blank">
+           detail view with _blank target
+      </a>
     </div>`,
   directives: [RouterLink]
 })
 class TestComponent {
 }
 
-
-@proxy
-@IMPLEMENTS(Location)
-class DummyLocation extends SpyObject {
-  noSuchMethod(m) { return super.noSuchMethod(m) }
-}
-
 function makeDummyLocation() {
-  var dl = new DummyLocation();
-  dl.spy('normalizeAbsolutely').andCallFake((url) => url);
+  var dl = new SpyLocation();
+  dl.spy('prepareExternalUrl').andCallFake((url) => url);
   return dl;
 }
 
-
-@proxy
-@IMPLEMENTS(Router)
-class DummyRouter extends SpyObject {
-  noSuchMethod(m) { return super.noSuchMethod(m) }
-}
-
 function makeDummyRouter() {
-  var dr = new DummyRouter();
-  dr.spy('generate').andCallFake((routeParams) => routeParams.join('='));
-  dr.spy('navigate');
+  var dr = new SpyRouter();
+  dr.spy('generate').andCallFake((routeParams) => dummyInstruction);
+  dr.spy('isRouteActive').andCallFake((_) => false);
+  dr.spy('navigateInstruction');
   return dr;
 }

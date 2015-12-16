@@ -1,8 +1,8 @@
-import {bind, OpaqueToken} from 'angular2/di';
+import {bind, provide, Provider, OpaqueToken} from 'angular2/src/core/di';
 import {DateWrapper} from 'angular2/src/facade/lang';
 
 export class Options {
-  static get DEFAULT_BINDINGS() { return _DEFAULT_BINDINGS; }
+  static get DEFAULT_PROVIDERS(): Provider[] { return _DEFAULT_PROVIDERS; }
   // TODO(tbosch): use static initializer when our transpiler supports it
   static get SAMPLE_ID() { return _SAMPLE_ID; }
   // TODO(tbosch): use static initializer when our transpiler supports it
@@ -26,6 +26,10 @@ export class Options {
   // TODO(tbosch): use static values when our transpiler supports them
   static get MICRO_METRICS() { return _MICRO_METRICS; }
   // TODO(tbosch): use static values when our transpiler supports them
+  static get RECEIVED_DATA() { return _RECEIVED_DATA; }
+  // TODO(tbosch): use static values when our transpiler supports them
+  static get REQUEST_COUNT() { return _REQUEST_COUNT; }
+  // TODO(tbosch): use static values when our transpiler supports them
   static get CAPTURE_FRAMES() { return _CAPTURE_FRAMES; }
 }
 
@@ -40,15 +44,19 @@ var _USER_AGENT = new OpaqueToken('Options.userAgent');
 var _MICRO_METRICS = new OpaqueToken('Options.microMetrics');
 var _NOW = new OpaqueToken('Options.now');
 var _WRITE_FILE = new OpaqueToken('Options.writeFile');
+var _RECEIVED_DATA = new OpaqueToken('Options.receivedData');
+var _REQUEST_COUNT = new OpaqueToken('Options.requestCount');
 var _CAPTURE_FRAMES = new OpaqueToken('Options.frameCapture');
 
-var _DEFAULT_BINDINGS = [
+var _DEFAULT_PROVIDERS = [
   bind(_DEFAULT_DESCRIPTION)
       .toValue({}),
-  bind(_SAMPLE_DESCRIPTION).toValue({}),
-  bind(_FORCE_GC).toValue(false),
-  bind(_PREPARE).toValue(false),
-  bind(_MICRO_METRICS).toValue({}),
-  bind(_NOW).toValue(() => DateWrapper.now()),
-  bind(_CAPTURE_FRAMES).toValue(false)
+  provide(_SAMPLE_DESCRIPTION, {useValue: {}}),
+  provide(_FORCE_GC, {useValue: false}),
+  provide(_PREPARE, {useValue: false}),
+  provide(_MICRO_METRICS, {useValue: {}}),
+  provide(_NOW, {useValue: () => DateWrapper.now()}),
+  provide(_RECEIVED_DATA, {useValue: false}),
+  provide(_REQUEST_COUNT, {useValue: false}),
+  provide(_CAPTURE_FRAMES, {useValue: false})
 ];

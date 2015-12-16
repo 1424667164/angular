@@ -1,21 +1,21 @@
-import {reflector} from 'angular2/src/reflection/reflection';
-import {isPresent, isJsObject} from 'angular2/src/facade/lang';
-import {getIntParameter, bindAction, microBenchmark} from 'angular2/src/test_lib/benchmark_util';
-import {BrowserDomAdapter} from 'angular2/src/dom/browser_adapter';
+import {reflector} from 'angular2/src/core/reflection/reflection';
+import {isPresent} from 'angular2/src/facade/lang';
+import {getIntParameter, bindAction, microBenchmark} from 'angular2/src/testing/benchmark_util';
+import {BrowserDomAdapter} from 'angular2/src/platform/browser/browser_adapter';
 
 import {
   Lexer,
   Parser,
   ChangeDispatcher,
-  ChangeDetection,
-  DynamicChangeDetection,
-  JitChangeDetection,
+  DebugContext,
+  DynamicProtoChangeDetector,
+  JitProtoChangeDetector,
   ChangeDetectorDefinition,
+  ChangeDetectorGenConfig,
   BindingRecord,
   DirectiveRecord,
-  DirectiveIndex,
-  DEFAULT
-} from 'angular2/change_detection';
+  DirectiveIndex
+} from 'angular2/src/core/change_detection/change_detection';
 
 
 // ---- SHARED
@@ -244,12 +244,13 @@ function runBaselineWrites(baselineHead, numberOfRuns, object) {
 
 // ---- CHANGE DETECTION
 
-function setUpChangeDetection(changeDetection: ChangeDetection, iterations, object) {
+function setUpChangeDetection(protoChangeDetectorFactory: Function, iterations, object) {
   var dispatcher = new DummyDispatcher();
   var parser = new Parser(new Lexer());
 
-  var parentProto = changeDetection.createProtoChangeDetector(
-      new ChangeDetectorDefinition('parent', null, [], [], []));
+  var genConfig = new ChangeDetectorGenConfig(false, false, true);
+  var parentProto = protoChangeDetectorFactory(
+      new ChangeDetectorDefinition('parent', null, [], [], [], [], genConfig));
   var parentCd = parentProto.instantiate(dispatcher);
 
   var directiveRecord = new DirectiveRecord({directiveIndex: new DirectiveIndex(0, 0)});
@@ -276,15 +277,15 @@ function setUpChangeDetection(changeDetection: ChangeDetection, iterations, obje
                                      reflector.setter("field9"), directiveRecord)
   ];
 
-  var proto = changeDetection.createProtoChangeDetector(
-      new ChangeDetectorDefinition("proto", null, [], bindings, [directiveRecord]));
+  var proto = protoChangeDetectorFactory(
+      new ChangeDetectorDefinition("proto", null, [], bindings, [], [directiveRecord], genConfig));
 
   var targetObj = new Obj();
-  parentCd.hydrate(object, null, new FakeDirectives(targetObj));
+  parentCd.hydrate(object, null, new FakeDirectives(targetObj), null);
   for (var i = 0; i < iterations; ++i) {
     var cd = proto.instantiate(dispatcher);
-    cd.hydrate(object, null, new FakeDirectives(targetObj));
-    parentCd.addChild(cd);
+    cd.hydrate(object, null, new FakeDirectives(targetObj), null);
+    parentCd.addContentChild(cd);
   }
   return parentCd;
 }
@@ -331,8 +332,9 @@ export function main() {
 
 
   // -- DYNAMIC
-  var ng2DynamicChangeDetector =
-      setUpChangeDetection(new DynamicChangeDetection(null), numberOfDetectors, object);
+  var ng2DynamicChangeDetector = setUpChangeDetection(
+      (changeDetectorDefinition) => new DynamicProtoChangeDetector(changeDetectorDefinition),
+      numberOfDetectors, object);
 
   runChangeDetectionReads(ng2DynamicChangeDetector, 1);  // warmup
 
@@ -350,9 +352,10 @@ export function main() {
 
   // -- JIT
   // Reenable when we have transformers for Dart
-  if (isJsObject({})) {
-    var ng2JitChangeDetector =
-        setUpChangeDetection(new JitChangeDetection(null), numberOfDetectors, object);
+  if (JitProtoChangeDetector.isSupported()) {
+    var ng2JitChangeDetector = setUpChangeDetection(
+        (changeDetectorDefinition) => new JitProtoChangeDetector(changeDetectorDefinition),
+        numberOfDetectors, object);
 
     runChangeDetectionReads(ng2JitChangeDetector, 1);  // warmup
 
@@ -380,6 +383,11 @@ class FakeDirectives {
 }
 
 class DummyDispatcher implements ChangeDispatcher {
-  notifyOnBinding(bindingRecord, newValue) { throw "Should not be used"; }
-  notifyOnAllChangesDone() {}
+  getDebugContext(elementIndex: number, directiveIndex: DirectiveIndex): DebugContext {
+    throw "getDebugContext not implemented.";
+  }
+  notifyOnBinding(bindingTarget, newValue) { throw "Should not be used"; }
+  logBindingUpdate(bindingTarget, newValue) { throw "Should not be used"; }
+  notifyAfterContentChecked() {}
+  notifyAfterViewChecked() {}
 }

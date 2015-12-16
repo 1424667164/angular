@@ -1,16 +1,10 @@
-import {describe, it, expect, beforeEach, ddescribe, iit, xit} from 'angular2/test_lib';
+import {describe, it, expect, beforeEach, ddescribe, iit, xit} from 'angular2/testing_internal';
 
-import {
-  List,
-  ListWrapper,
-  StringMap,
-  StringMapWrapper,
-  MapWrapper
-} from 'angular2/src/facade/collection';
+import {ListWrapper, StringMapWrapper, MapWrapper} from 'angular2/src/facade/collection';
 
 export function main() {
   describe('ListWrapper', () => {
-    var l: List<int>;
+    var l: number[];
 
     describe('splice', () => {
       it('should remove sublist of given length and return it', () => {
@@ -63,6 +57,11 @@ export function main() {
 
       it('should support negative end',
          () => { expect(ListWrapper.slice(l, -3, -1)).toEqual([2, 3]); });
+
+      it('should return empty list if start is greater than end', () => {
+        expect(ListWrapper.slice(l, 4, 2)).toEqual([]);
+        expect(ListWrapper.slice(l, -2, -4)).toEqual([]);
+      });
     });
 
     describe('indexOf', () => {
@@ -76,6 +75,32 @@ export function main() {
       it('should respect the startIndex parameter',
          () => { expect(ListWrapper.indexOf(l, 1, 1)).toEqual(-1); });
     });
+
+    describe('maximum', () => {
+      it('should return the maximal element',
+         () => { expect(ListWrapper.maximum([1, 2, 3, 4], x => x)).toEqual(4); });
+
+      it('should ignore null values',
+         () => { expect(ListWrapper.maximum([null, 2, 3, null], x => x)).toEqual(3); });
+
+      it('should use the provided function to determine maximum',
+         () => { expect(ListWrapper.maximum([1, 2, 3, 4], x => -x)).toEqual(1); });
+
+      it('should return null for an empty list',
+         () => { expect(ListWrapper.maximum([], x => x)).toEqual(null); });
+    });
+
+    describe('forEachWithIndex', () => {
+      var l;
+
+      beforeEach(() => { l = ["a", "b"]; });
+
+      it('should iterate over an array passing values and indices', () => {
+        var record = [];
+        ListWrapper.forEachWithIndex(l, (value, index) => record.push([value, index]));
+        expect(record).toEqual([["a", 0], ["b", 1]]);
+      });
+    });
   });
 
   describe('StringMapWrapper', () => {
@@ -84,33 +109,33 @@ export function main() {
          () => { expect(StringMapWrapper.equals({}, {})).toBe(true); });
 
       it('should return true when comparing the same map', () => {
-        var m1 = {'a': 1, 'b': 2, 'c': 3};
+        var m1: {[key: string]: number} = {'a': 1, 'b': 2, 'c': 3};
         expect(StringMapWrapper.equals(m1, m1)).toBe(true);
       });
 
       it('should return true when comparing different maps with the same keys and values', () => {
-        var m1 = {'a': 1, 'b': 2, 'c': 3};
-        var m2 = {'a': 1, 'b': 2, 'c': 3};
+        var m1: {[key: string]: number} = {'a': 1, 'b': 2, 'c': 3};
+        var m2: {[key: string]: number} = {'a': 1, 'b': 2, 'c': 3};
         expect(StringMapWrapper.equals(m1, m2)).toBe(true);
       });
 
       it('should return false when comparing maps with different numbers of keys', () => {
-        var m1 = {'a': 1, 'b': 2, 'c': 3};
-        var m2 = {'a': 1, 'b': 2, 'c': 3, 'd': 4};
+        var m1: {[key: string]: number} = {'a': 1, 'b': 2, 'c': 3};
+        var m2: {[key: string]: number} = {'a': 1, 'b': 2, 'c': 3, 'd': 4};
         expect(StringMapWrapper.equals(m1, m2)).toBe(false);
         expect(StringMapWrapper.equals(m2, m1)).toBe(false);
       });
 
       it('should return false when comparing maps with different keys', () => {
-        var m1 = {'a': 1, 'b': 2, 'c': 3};
-        var m2 = {'a': 1, 'b': 2, 'CC': 3};
+        var m1: {[key: string]: number} = {'a': 1, 'b': 2, 'c': 3};
+        var m2: {[key: string]: number} = {'a': 1, 'b': 2, 'CC': 3};
         expect(StringMapWrapper.equals(m1, m2)).toBe(false);
         expect(StringMapWrapper.equals(m2, m1)).toBe(false);
       });
 
       it('should return false when comparing maps with different values', () => {
-        var m1 = {'a': 1, 'b': 2, 'c': 3};
-        var m2 = {'a': 1, 'b': 20, 'c': 3};
+        var m1: {[key: string]: number} = {'a': 1, 'b': 2, 'c': 3};
+        var m2: {[key: string]: number} = {'a': 1, 'b': 20, 'c': 3};
         expect(StringMapWrapper.equals(m1, m2)).toBe(false);
         expect(StringMapWrapper.equals(m2, m1)).toBe(false);
       });

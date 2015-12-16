@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -ex
 
 echo =============================================================================
 # go to project dir
@@ -13,6 +13,5 @@ if  ${SCRIPT_DIR}/env_dart.sh 2>&1 > /dev/null ; then
 fi
 
 ./node_modules/.bin/gulp pre-test-checks
-./node_modules/.bin/gulp test.js --browsers=${KARMA_BROWSERS:-ChromeCanary}
+./node_modules/.bin/gulp test.js --browsers=${KARMA_BROWSERS:-Chrome}
 ${SCRIPT_DIR}/test_e2e_js.sh
-./node_modules/.bin/gulp post-test-checks
