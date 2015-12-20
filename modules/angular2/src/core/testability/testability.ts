@@ -1,8 +1,9 @@
-import {Injectable} from 'angular2/di';
-import {DOM} from 'angular2/src/dom/dom_adapter';
-import {Map, MapWrapper, List, ListWrapper} from 'angular2/src/facade/collection';
-import {StringWrapper, isBlank, BaseException} from 'angular2/src/facade/lang';
-import * as getTestabilityModule from './get_testability';
+import {Injectable} from 'angular2/src/core/di';
+import {Map, MapWrapper, ListWrapper} from 'angular2/src/facade/collection';
+import {CONST, CONST_EXPR} from 'angular2/src/facade/lang';
+import {BaseException, WrappedException} from 'angular2/src/facade/exceptions';
+import {NgZone} from '../zone/ng_zone';
+import {PromiseWrapper, ObservableWrapper} from 'angular2/src/facade/async';
 
 
 /**
@@ -12,71 +13,128 @@ import * as getTestabilityModule from './get_testability';
  */
 @Injectable()
 export class Testability {
-  _pendingCount: number;
-  _callbacks: List<Function>;
+  /** @internal */
+  _pendingCount: number = 0;
+  /** @internal */
+  _callbacks: Function[] = [];
+  /** @internal */
+  _isAngularEventPending: boolean = false;
+  constructor(_ngZone: NgZone) { this._watchAngularEvents(_ngZone); }
 
-  constructor() {
-    this._pendingCount = 0;
-    this._callbacks = [];
+  /** @internal */
+  _watchAngularEvents(_ngZone: NgZone): void {
+    ObservableWrapper.subscribe(_ngZone.onTurnStart,
+                                (_) => { this._isAngularEventPending = true; });
+
+    _ngZone.runOutsideAngular(() => {
+      ObservableWrapper.subscribe(_ngZone.onEventDone, (_) => {
+        if (!_ngZone.hasPendingTimers) {
+          this._isAngularEventPending = false;
+          this._runCallbacksIfReady();
+        }
+      });
+    });
   }
 
-  increaseCount(delta: number = 1): number {
-    this._pendingCount += delta;
-    if (this._pendingCount < 0) {
-      throw new BaseException('pending async requests below zero');
-    } else if (this._pendingCount == 0) {
-      this._runCallbacks();
-    }
+  increasePendingRequestCount(): number {
+    this._pendingCount += 1;
     return this._pendingCount;
   }
 
-  _runCallbacks() {
-    while (this._callbacks.length !== 0) {
-      ListWrapper.removeLast(this._callbacks)();
+  decreasePendingRequestCount(): number {
+    this._pendingCount -= 1;
+    if (this._pendingCount < 0) {
+      throw new BaseException('pending async requests below zero');
     }
+    this._runCallbacksIfReady();
+    return this._pendingCount;
   }
 
-  whenStable(callback: Function) {
+  isStable(): boolean { return this._pendingCount == 0 && !this._isAngularEventPending; }
+
+  /** @internal */
+  _runCallbacksIfReady(): void {
+    if (!this.isStable()) {
+      return;  // Not ready
+    }
+
+    // Schedules the call backs in a new frame so that it is always async.
+    PromiseWrapper.resolve(null).then((_) => {
+      while (this._callbacks.length !== 0) {
+        (this._callbacks.pop())();
+      }
+    });
+  }
+
+  whenStable(callback: Function): void {
     this._callbacks.push(callback);
-
-    if (this._pendingCount === 0) {
-      this._runCallbacks();
-    }
-    // TODO(juliemr) - hook into the zone api.
+    this._runCallbacksIfReady();
   }
 
-  getPendingCount(): number { return this._pendingCount; }
+  getPendingRequestCount(): number { return this._pendingCount; }
 
-  findBindings(using, binding: string, exactMatch: boolean): List<any> {
+  // This only accounts for ngZone, and not pending counts. Use `whenStable` to
+  // check for stability.
+  isAngularEventPending(): boolean { return this._isAngularEventPending; }
+
+  findBindings(using: any, provider: string, exactMatch: boolean): any[] {
+    // TODO(juliemr): implement.
+    return [];
+  }
+
+  findProviders(using: any, provider: string, exactMatch: boolean): any[] {
     // TODO(juliemr): implement.
     return [];
   }
 }
 
+/**
+ * A global registry of {@link Testability} instances for specific elements.
+ */
 @Injectable()
 export class TestabilityRegistry {
-  _applications: Map<any, Testability>;
+  /** @internal */
+  _applications = new Map<any, Testability>();
 
-  constructor() {
-    this._applications = new Map();
+  constructor() { _testabilityGetter.addToWindow(this); }
 
-    getTestabilityModule.GetTestability.addToWindow(this);
-  }
-
-  registerApplication(token, testability: Testability) {
+  registerApplication(token: any, testability: Testability) {
     this._applications.set(token, testability);
   }
 
-  findTestabilityInTree(elem): Testability {
-    if (elem == null) {
-      return null;
-    }
-    if (this._applications.has(elem)) {
-      return this._applications.get(elem);
-    }
-    if (DOM.isShadowRoot(elem)) {
-      return this.findTestabilityInTree(DOM.getHost(elem));
-    }
-    return this.findTestabilityInTree(DOM.parentElement(elem));
+  getTestability(elem: any): Testability { return this._applications.get(elem); }
+
+  getAllTestabilities(): Testability[] { return MapWrapper.values(this._applications); }
+
+  findTestabilityInTree(elem: Node, findInAncestors: boolean = true): Testability {
+    return _testabilityGetter.findTestabilityInTree(this, elem, findInAncestors);
   }
 }
+
+/**
+ * Adapter interface for retrieving the `Testability` service associated for a
+ * particular context.
+ */
+export interface GetTestability {
+  addToWindow(registry: TestabilityRegistry): void;
+  findTestabilityInTree(registry: TestabilityRegistry, elem: any,
+                        findInAncestors: boolean): Testability;
+}
+
+@CONST()
+class _NoopGetTestability implements GetTestability {
+  addToWindow(registry: TestabilityRegistry): void {}
+  findTestabilityInTree(registry: TestabilityRegistry, elem: any,
+                        findInAncestors: boolean): Testability {
+    return null;
+  }
+}
+
+/**
+ * Set the {@link GetTestability} implementation used by the Angular testing framework.
+ */
+export function setTestabilityGetter(getter: GetTestability): void {
+  _testabilityGetter = getter;
+}
+
+var _testabilityGetter: GetTestability = CONST_EXPR(new _NoopGetTestability());

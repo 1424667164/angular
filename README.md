@@ -4,6 +4,7 @@
 [![Issue Stats](http://issuestats.com/github/angular/angular/badge/issue)](http://issuestats.com/github/angular/angular)
 [![npm version](https://badge.fury.io/js/angular2.svg)](http://badge.fury.io/js/angular2)
 [![Downloads](http://img.shields.io/npm/dm/angular2.svg)](https://npmjs.org/package/angular2)
+[![Sauce Test Status](https://saucelabs.com/browser-matrix/angular2-ci.svg)](https://saucelabs.com/u/angular2-ci)
 
 Angular 
 =========
@@ -11,19 +12,11 @@ Angular
 Angular is a development platform for building mobile and desktop web applications. This is the
 repository for [Angular 2][ng2], both the JavaScript (JS) and [Dart][dart] versions.
 
-Angular 2 is currently in **Developer Preview**. We recommend using Angular 1.X for production
-applications:
-
-* [AngularJS][ngJS]: [angular/angular.js](http://github.com/angular/angular.js).
-* [AngularDart][ngDart]: [angular/angular.dart](http://github.com/angular/angular.dart).
+Angular 2 is currently in **Beta**. 
 
 ## Quickstart
 
-[Get started in 5 minutes][quickstart]
-
-## Setup & Install Angular 2
-
-Follow the instructions given on the [Angular download page][download].
+[Get started in 5 minutes][quickstart].
 
 
 ## Want to help?
@@ -35,8 +28,7 @@ guidelines for [contributing][contributing] and then check out one of our issues
 [contributing]: http://github.com/angular/angular/blob/master/CONTRIBUTING.md
 [dart]: http://www.dartlang.org
 [dartium]: http://www.dartlang.org/tools/dartium
-[download]: http://angular.io/download
-[quickstart]: https://angular.io/docs/js/latest/quickstart.html
+[quickstart]: https://angular.io/docs/ts/latest/quickstart.html
 [ng2]: http://angular.io
 [ngDart]: http://angulardart.org
 [ngJS]: http://angularjs.org

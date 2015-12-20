@@ -1,5 +1,5 @@
 import {Math} from 'angular2/src/facade/math';
-
+import {StringWrapper} from 'angular2/src/facade/lang';
 import {ListWrapper, Map, MapWrapper} from 'angular2/src/facade/collection';
 
 export var ITEMS = 1000;
@@ -66,7 +66,7 @@ export class RawEntity {
     var pieces = key.split('.');
     var last = ListWrapper.last(pieces);
     pieces.length = pieces.length - 1;
-    var target = _resolve(pieces, this);
+    var target = this._resolve(pieces, this);
     if (target == null) {
       return null;
     }
@@ -81,18 +81,18 @@ export class RawEntity {
     var pieces = key.split('.');
     var last = ListWrapper.last(pieces);
     pieces.length = pieces.length - 1;
-    var target = _resolve(pieces, this);
+    var target = this._resolve(pieces, this);
     target[last] = value;
   }
 
   remove(key: string) {
-    if (!key.contains('.')) {
-      return MapWrapper.delete(this._data, key);
+    if (!StringWrapper.contains(key, '.')) {
+      return this._data.delete(key);
     }
     var pieces = key.split('.');
     var last = ListWrapper.last(pieces);
     pieces.length = pieces.length - 1;
-    var target = _resolve(pieces, this);
+    var target = this._resolve(pieces, this);
     return target.remove(last);
   }
 

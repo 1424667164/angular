@@ -1,22 +1,13 @@
-import {
-  bootstrap,
-  Component,
-  Directive,
-  DynamicComponentLoader,
-  ElementRef,
-  View
-} from 'angular2/angular2';
-import {LifeCycle} from 'angular2/src/core/life_cycle/life_cycle';
-import {List, ListWrapper} from 'angular2/src/facade/collection';
-import {reflector} from 'angular2/src/reflection/reflection';
-import {ReflectionCapabilities} from 'angular2/src/reflection/reflection_capabilities';
-import {getIntParameter, bindAction} from 'angular2/src/test_lib/benchmark_util';
-import {NgIf, NgFor} from 'angular2/directives';
+import {bootstrap} from 'angular2/bootstrap';
+import {Component, Directive, DynamicComponentLoader, ElementRef, View} from 'angular2/core';
+import {NgIf, NgFor} from 'angular2/common';
+import {ApplicationRef} from 'angular2/src/core/application_ref';
+import {ListWrapper} from 'angular2/src/facade/collection';
+import {getIntParameter, bindAction} from 'angular2/src/testing/benchmark_util';
 
 var testList = null;
 
 export function main() {
-  reflector.reflectionCapabilities = new ReflectionCapabilities();
   var size = getIntParameter('size');
   testList = ListWrapper.createFixedSize(size);
 
@@ -24,29 +15,29 @@ export function main() {
       .then((ref) => {
         var injector = ref.injector;
         var app: AppComponent = ref.hostComponent;
-        var lifeCycle = injector.get(LifeCycle);
+        var appRef = injector.get(ApplicationRef);
 
         bindAction('#reset', function() {
           app.reset();
-          lifeCycle.tick();
+          appRef.tick();
         });
 
         // Baseline (plain components)
         bindAction('#createPlainComponents', function() {
           app.createPlainComponents();
-          lifeCycle.tick();
+          appRef.tick();
         });
 
         // Components with decorators
         bindAction('#createComponentsWithDirectives', function() {
           app.createComponentsWithDirectives();
-          lifeCycle.tick();
+          appRef.tick();
         });
 
         // Components with decorators
         bindAction('#createDynamicComponents', function() {
           app.createDynamicComponents();
-          lifeCycle.tick();
+          appRef.tick();
         });
       });
 }
@@ -72,21 +63,21 @@ class DynamicDummy {
 @View({
   directives: [NgIf, NgFor, DummyComponent, DummyDirective, DynamicDummy],
   template: `
-    <div *ng-if="testingPlainComponents">
-      <dummy *ng-for="#i of list"></dummy>
+    <div *ngIf="testingPlainComponents">
+      <dummy *ngFor="#i of list"></dummy>
     </div>
 
-    <div *ng-if="testingWithDirectives">
-      <dummy dummy-decorator *ng-for="#i of list"></dummy>
+    <div *ngIf="testingWithDirectives">
+      <dummy dummy-decorator *ngFor="#i of list"></dummy>
     </div>
 
-    <div *ng-if="testingDynamicComponents">
-      <dynamic-dummy *ng-for="#i of list"></dynamic-dummy>
+    <div *ngIf="testingDynamicComponents">
+      <dynamic-dummy *ngFor="#i of list"></dynamic-dummy>
     </div>
   `
 })
 class AppComponent {
-  list: List<any>;
+  list: any[];
   testingPlainComponents: boolean;
   testingWithDirectives: boolean;
   testingDynamicComponents: boolean;

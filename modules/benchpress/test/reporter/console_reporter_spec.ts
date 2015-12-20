@@ -1,12 +1,21 @@
-import {describe, ddescribe, it, iit, xit, expect, beforeEach, afterEach} from 'angular2/test_lib';
+import {
+  describe,
+  ddescribe,
+  it,
+  iit,
+  xit,
+  expect,
+  beforeEach,
+  afterEach
+} from 'angular2/testing_internal';
 
 import {isBlank, isPresent, Date, DateWrapper} from 'angular2/src/facade/lang';
-import {List, ListWrapper} from 'angular2/src/facade/collection';
 
 import {
   SampleState,
   Reporter,
   bind,
+  provide,
   Injector,
   ConsoleReporter,
   SampleDescription,
@@ -29,7 +38,8 @@ export function main() {
       }
       var bindings = [
         ConsoleReporter.BINDINGS,
-        bind(SampleDescription).toValue(new SampleDescription(sampleId, descriptions, metrics)),
+        provide(SampleDescription,
+                {useValue: new SampleDescription(sampleId, descriptions, metrics)}),
         bind(ConsoleReporter.PRINT).toValue((line) => log.push(line))
       ];
       if (isPresent(columnWidth)) {

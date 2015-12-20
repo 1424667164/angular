@@ -9,18 +9,17 @@ import {
   inject,
   it,
   xit,
-} from 'angular2/test_lib';
+} from 'angular2/testing_internal';
 
-import {List, ListWrapper, StringMap} from 'angular2/src/facade/collection';
 import {PromiseWrapper, Promise} from 'angular2/src/facade/async';
 import {DateWrapper} from 'angular2/src/facade/lang';
 
-import {Reporter, MultiReporter, bind, Injector, MeasureValues} from 'benchpress/common';
+import {Reporter, MultiReporter, bind, provide, Injector, MeasureValues} from 'benchpress/common';
 
 export function main() {
-  function createReporters(ids) {
+  function createReporters(ids: any[]) {
     var r = Injector.resolveAndCreate([
-                      ListWrapper.map(ids, (id) => bind(id).toValue(new MockReporter(id))),
+                      ids.map(id => provide(id, {useValue: new MockReporter(id)})),
                       MultiReporter.createBindings(ids)
                     ])
                 .get(MultiReporter);
@@ -65,12 +64,12 @@ export function main() {
 class MockReporter extends Reporter {
   constructor(private _id: string) { super(); }
 
-  reportMeasureValues(values: MeasureValues): Promise<StringMap<string, any>> {
+  reportMeasureValues(values: MeasureValues): Promise<{[key: string]: any}> {
     return PromiseWrapper.resolve({'id': this._id, 'values': values});
   }
 
-  reportSample(completeSample: List<MeasureValues>,
-               validSample: List<MeasureValues>): Promise<StringMap<string, any>> {
+  reportSample(completeSample: MeasureValues[],
+               validSample: MeasureValues[]): Promise<{[key: string]: any}> {
     return PromiseWrapper.resolve(
         {'id': this._id, 'completeSample': completeSample, 'validSample': validSample});
   }

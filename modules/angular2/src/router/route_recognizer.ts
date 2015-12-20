@@ -1,133 +1,119 @@
-import {
-  RegExp,
-  RegExpWrapper,
-  StringWrapper,
-  isBlank,
-  isPresent,
-  isType,
-  isStringMap,
-  BaseException
-} from 'angular2/src/facade/lang';
-import {
-  Map,
-  MapWrapper,
-  List,
-  ListWrapper,
-  StringMap,
-  StringMapWrapper
-} from 'angular2/src/facade/collection';
+import {isPresent, isBlank} from 'angular2/src/facade/lang';
+import {BaseException} from 'angular2/src/facade/exceptions';
+import {PromiseWrapper, Promise} from 'angular2/src/facade/promise';
+import {Map} from 'angular2/src/facade/collection';
 
-import {PathRecognizer} from './path_recognizer';
 import {RouteHandler} from './route_handler';
-import {AsyncRouteHandler} from './async_route_handler';
-import {SyncRouteHandler} from './sync_route_handler';
+import {Url} from './url_parser';
+import {ComponentInstruction} from './instruction';
+import {PathRecognizer} from './path_recognizer';
 
-/**
- * `RouteRecognizer` is responsible for recognizing routes for a single component.
- * It is consumed by `RouteRegistry`, which knows how to recognize an entire hierarchy of
- * components.
- */
-export class RouteRecognizer {
-  names: Map<string, PathRecognizer> = new Map();
-  redirects: Map<string, string> = new Map();
-  matchers: Map<RegExp, PathRecognizer> = new Map();
 
-  addRedirect(path: string, target: string): void {
-    if (path == '/') {
-      path = '';
-    }
-    this.redirects.set(path, target);
+export abstract class RouteMatch {}
+
+export interface AbstractRecognizer {
+  hash: string;
+  path: string;
+  recognize(beginningSegment: Url): Promise<RouteMatch>;
+  generate(params: {[key: string]: any}): ComponentInstruction;
+}
+
+
+export class PathMatch extends RouteMatch {
+  constructor(public instruction: ComponentInstruction, public remaining: Url,
+              public remainingAux: Url[]) {
+    super();
   }
+}
 
-  addConfig(path: string, handlerObj: any, alias: string = null): boolean {
-    var handler = configObjToHandler(handlerObj['component']);
-    var recognizer = new PathRecognizer(path, handler);
-    MapWrapper.forEach(this.matchers, (matcher, _) => {
-      if (recognizer.regex.toString() == matcher.regex.toString()) {
-        throw new BaseException(
-            `Configuration '${path}' conflicts with existing route '${matcher.path}'`);
-      }
-    });
-    this.matchers.set(recognizer.regex, recognizer);
-    if (isPresent(alias)) {
-      this.names.set(alias, recognizer);
-    }
-    return recognizer.terminal;
+
+export class RedirectMatch extends RouteMatch {
+  constructor(public redirectTo: any[], public specificity) { super(); }
+}
+
+export class RedirectRecognizer implements AbstractRecognizer {
+  private _pathRecognizer: PathRecognizer;
+  public hash: string;
+
+  constructor(public path: string, public redirectTo: any[]) {
+    this._pathRecognizer = new PathRecognizer(path);
+    this.hash = this._pathRecognizer.hash;
   }
-
 
   /**
-   * Given a URL, returns a list of `RouteMatch`es, which are partial recognitions for some route.
-   *
+   * Returns `null` or a `ParsedUrl` representing the new path to match
    */
-  recognize(url: string): List<RouteMatch> {
-    var solutions = [];
-    if (url.length > 0 && url[url.length - 1] == '/') {
-      url = url.substring(0, url.length - 1);
+  recognize(beginningSegment: Url): Promise<RouteMatch> {
+    var match = null;
+    if (isPresent(this._pathRecognizer.recognize(beginningSegment))) {
+      match = new RedirectMatch(this.redirectTo, this._pathRecognizer.specificity);
     }
-
-    MapWrapper.forEach(this.redirects, (target, path) => {
-      // "/" redirect case
-      if (path == '/' || path == '') {
-        if (path == url) {
-          url = target;
-        }
-      } else if (url.startsWith(path)) {
-        url = target + url.substring(path.length);
-      }
-    });
-
-    MapWrapper.forEach(this.matchers, (pathRecognizer, regex) => {
-      var match;
-      if (isPresent(match = RegExpWrapper.firstMatch(regex, url))) {
-        var matchedUrl = '/';
-        var unmatchedUrl = '';
-        if (url != '/') {
-          matchedUrl = match[0];
-          unmatchedUrl = url.substring(match[0].length);
-        }
-        solutions.push(new RouteMatch(pathRecognizer, matchedUrl, unmatchedUrl));
-      }
-    });
-
-    return solutions;
+    return PromiseWrapper.resolve(match);
   }
 
-  hasRoute(name: string): boolean { return this.names.has(name); }
+  generate(params: {[key: string]: any}): ComponentInstruction {
+    throw new BaseException(`Tried to generate a redirect.`);
+  }
+}
 
-  generate(name: string, params: any): StringMap<string, any> {
-    var pathRecognizer: PathRecognizer = this.names.get(name);
-    if (isBlank(pathRecognizer)) {
+
+// represents something like '/foo/:bar'
+export class RouteRecognizer implements AbstractRecognizer {
+  specificity: number;
+  terminal: boolean = true;
+  hash: string;
+
+  private _cache: Map<string, ComponentInstruction> = new Map<string, ComponentInstruction>();
+  private _pathRecognizer: PathRecognizer;
+
+  // TODO: cache component instruction instances by params and by ParsedUrl instance
+
+  constructor(public path: string, public handler: RouteHandler) {
+    this._pathRecognizer = new PathRecognizer(path);
+    this.specificity = this._pathRecognizer.specificity;
+    this.hash = this._pathRecognizer.hash;
+    this.terminal = this._pathRecognizer.terminal;
+  }
+
+  recognize(beginningSegment: Url): Promise<RouteMatch> {
+    var res = this._pathRecognizer.recognize(beginningSegment);
+    if (isBlank(res)) {
       return null;
     }
-    var url = pathRecognizer.generate(params);
-    return {url, 'nextComponent': pathRecognizer.handler.componentType};
+
+    return this.handler.resolveComponentType().then((_) => {
+      var componentInstruction =
+          this._getInstruction(res['urlPath'], res['urlParams'], res['allParams']);
+      return new PathMatch(componentInstruction, res['nextSegment'], res['auxiliary']);
+    });
   }
-}
 
-export class RouteMatch {
-  constructor(public recognizer: PathRecognizer, public matchedUrl: string,
-              public unmatchedUrl: string) {}
-
-  params(): StringMap<string, string> { return this.recognizer.parseParams(this.matchedUrl); }
-}
-
-function configObjToHandler(config: any): RouteHandler {
-  if (isType(config)) {
-    return new SyncRouteHandler(config);
-  } else if (isStringMap(config)) {
-    if (isBlank(config['type'])) {
-      throw new BaseException(
-          `Component declaration when provided as a map should include a 'type' property`);
-    }
-    var componentType = config['type'];
-    if (componentType == 'constructor') {
-      return new SyncRouteHandler(config['constructor']);
-    } else if (componentType == 'loader') {
-      return new AsyncRouteHandler(config['loader']);
-    } else {
-      throw new BaseException(`oops`);
-    }
+  generate(params: {[key: string]: any}): ComponentInstruction {
+    var generated = this._pathRecognizer.generate(params);
+    var urlPath = generated['urlPath'];
+    var urlParams = generated['urlParams'];
+    return this._getInstruction(urlPath, urlParams, params);
   }
-  throw new BaseException(`Unexpected component "${config}".`);
+
+  generateComponentPathValues(params: {[key: string]: any}): {[key: string]: any} {
+    return this._pathRecognizer.generate(params);
+  }
+
+  private _getInstruction(urlPath: string, urlParams: string[],
+                          params: {[key: string]: any}): ComponentInstruction {
+    if (isBlank(this.handler.componentType)) {
+      throw new BaseException(`Tried to get instruction before the type was loaded.`);
+    }
+
+    var hashKey = urlPath + '?' + urlParams.join('?');
+    if (this._cache.has(hashKey)) {
+      return this._cache.get(hashKey);
+    }
+    var instruction =
+        new ComponentInstruction(urlPath, urlParams, this.handler.data, this.handler.componentType,
+                                 this.terminal, this.specificity, params);
+    this._cache.set(hashKey, instruction);
+
+    return instruction;
+  }
 }

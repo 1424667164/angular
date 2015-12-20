@@ -1,12 +1,12 @@
 import 'package:guinness/guinness.dart';
 import 'package:unittest/unittest.dart' as unit;
 
-import 'package:angular2/src/test_lib/test_lib.dart' show testSetup;
+import 'package:angular2/src/testing/testing_internal.dart' show testSetup;
 
 main() {
   unit.filterStacks = true;
   unit.formatStacks = false;
-  unit.unittestConfiguration.timeout = new Duration(milliseconds: 100);
+  unit.unittestConfiguration.timeout = new Duration(milliseconds: 2000);
 
   _printWarnings();
 

@@ -1,36 +1,9 @@
-library angular.core.facade.async;
+library angular2.core.facade.async;
 
 import 'dart:async';
-export 'dart:async' show Future, Stream, StreamController, StreamSubscription;
+export 'dart:async' show Stream, StreamController, StreamSubscription;
 
-class PromiseWrapper {
-  static Future resolve(obj) => new Future.value(obj);
-
-  static Future reject(obj, stackTrace) => new Future.error(obj,
-      stackTrace != null ? stackTrace : obj is Error ? obj.stackTrace : null);
-
-  static Future<List> all(List<dynamic> promises) {
-    return Future
-        .wait(promises.map((p) => p is Future ? p : new Future.value(p)));
-  }
-
-  static Future then(Future promise, success(value), [Function onError]) {
-    if (success == null) return promise.catchError(onError);
-    return promise.then(success, onError: onError);
-  }
-
-  static Future wrap(Function fn) {
-    return new Future(fn);
-  }
-  
-  // Note: We can't rename this method to `catch`, as this is not a valid
-  // method name in Dart.
-  static Future catchError(Future promise, Function onError) {
-    return promise.catchError(onError);
-  }
-
-  static CompleterWrapper completer() => new CompleterWrapper(new Completer());
-}
+export 'promise.dart';
 
 class TimerWrapper {
   static Timer setTimeout(fn(), int millis) =>
@@ -45,6 +18,7 @@ class TimerWrapper {
       fn();
     });
   }
+
   static void clearInterval(Timer timer) {
     timer.cancel();
   }
@@ -61,31 +35,84 @@ class ObservableWrapper {
     return obs is Stream;
   }
 
+  /**
+   * Returns whether `emitter` has any subscribers listening to events.
+   */
+  static bool hasSubscribers(EventEmitter emitter) {
+    return emitter._controller.hasListener;
+  }
+
   static void dispose(StreamSubscription s) {
     s.cancel();
   }
 
+  @Deprecated('Use callEmit() instead')
   static void callNext(EventEmitter emitter, value) {
     emitter.add(value);
   }
+  
+  static void callEmit(EventEmitter emitter, value) {
+    emitter.add(value);
+  }
 
-  static void callThrow(EventEmitter emitter, error) {
+  static void callError(EventEmitter emitter, error) {
     emitter.addError(error);
   }
 
-  static void callReturn(EventEmitter emitter) {
+  static void callComplete(EventEmitter emitter) {
     emitter.close();
+  }
+
+  static Stream fromPromise(Future f) {
+    return new Stream.fromFuture(f);
+  }
+
+  static Future toPromise(Stream s) {
+    return s.single;
   }
 }
 
-class EventEmitter extends Stream {
-  StreamController<String> _controller;
+class EventEmitter<T> extends Stream<T> {
+  StreamController<dynamic> _controller;
 
-  EventEmitter() {
-    _controller = new StreamController.broadcast();
+  /// Creates an instance of [EventEmitter], which depending on [isAsync],
+  /// delivers events synchronously or asynchronously.
+  EventEmitter([bool isAsync = true]) {
+    _controller = new StreamController.broadcast(sync: !isAsync);
   }
 
-  StreamSubscription listen(void onData(String line),
+  StreamSubscription listen(void onData(dynamic line),
+      {void onError(Error error), void onDone(), bool cancelOnError}) {
+    return _controller.stream.listen(onData,
+        onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+  }
+
+  void add(value) {
+    _controller.add(value);
+  }
+  
+  void emit(value) {
+    _controller.add(value);
+  }
+
+  void addError(error) {
+    _controller.addError(error);
+  }
+
+  void close() {
+    _controller.close();
+  }
+}
+
+//todo(robwormald): maybe fix in ts2dart?
+class Subject<T> extends Stream<T> {
+  StreamController<dynamic> _controller;
+
+  Subject([bool isAsync = true]) {
+    _controller = new StreamController.broadcast(sync: !isAsync);
+  }
+
+  StreamSubscription listen(void onData(dynamic line),
       {void onError(Error error), void onDone(), bool cancelOnError}) {
     return _controller.stream.listen(onData,
         onError: onError, onDone: onDone, cancelOnError: cancelOnError);
@@ -101,24 +128,5 @@ class EventEmitter extends Stream {
 
   void close() {
     _controller.close();
-  }
-}
-
-class CompleterWrapper {
-  final Completer c;
-
-  CompleterWrapper(this.c);
-
-  Future get promise => c.future;
-
-  void resolve(v) {
-    c.complete(v);
-  }
-
-  void reject(error, stack) {
-    if (stack == null && error is Error) {
-      stack = error.stackTrace;
-    }
-    c.completeError(error, stack);
   }
 }

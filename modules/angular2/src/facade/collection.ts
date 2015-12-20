@@ -1,34 +1,37 @@
-import {isJsObject, global, isPresent, isArray} from 'angular2/src/facade/lang';
+import {
+  isJsObject,
+  global,
+  isPresent,
+  isBlank,
+  isArray,
+  getSymbolIterator
+} from 'angular2/src/facade/lang';
 
-export var List = global.Array;
 export var Map = global.Map;
 export var Set = global.Set;
-export var StringMap = global.Object;
 
 // Safari and Internet Explorer do not support the iterable parameter to the
 // Map constructor.  We work around that by manually adding the items.
-var createMapFromPairs: {(pairs: List<any>): Map<any, any>} = (function() {
+var createMapFromPairs: {(pairs: any[]): Map<any, any>} = (function() {
   try {
-    if (new Map([1, 2]).size === 2) {
-      return function createMapFromPairs(pairs: List<any>): Map<any, any> {
-        return new Map(pairs);
-      };
+    if (new Map(<any>[[1, 2]]).size === 1) {
+      return function createMapFromPairs(pairs: any[]): Map<any, any> { return new Map(pairs); };
     }
   } catch (e) {
   }
-  return function createMapAndPopulateFromPairs(pairs: List<any>): Map<any, any> {
+  return function createMapAndPopulateFromPairs(pairs: any[]): Map<any, any> {
     var map = new Map();
     for (var i = 0; i < pairs.length; i++) {
       var pair = pairs[i];
       map.set(pair[0], pair[1]);
     }
     return map;
-  }
+  };
 })();
 var createMapFromMap: {(m: Map<any, any>): Map<any, any>} = (function() {
   try {
-    if (new Map(new Map())) {
-      return function createMapFromMap(m: Map<any, any>): Map<any, any> { return new Map(m); };
+    if (new Map(<any>new Map())) {
+      return function createMapFromMap(m: Map<any, any>): Map<any, any> { return new Map(<any>m); };
     }
   } catch (e) {
   }
@@ -36,7 +39,7 @@ var createMapFromMap: {(m: Map<any, any>): Map<any, any>} = (function() {
     var map = new Map();
     m.forEach((v, k) => { map.set(k, v); });
     return map;
-  }
+  };
 })();
 var _clearValues: {(m: Map<any, any>)} = (function() {
   if ((<any>(new Map()).keys()).next) {
@@ -50,55 +53,77 @@ var _clearValues: {(m: Map<any, any>)} = (function() {
   } else {
     return function _clearValuesWithForeEach(m: Map<any, any>) {
       m.forEach((v, k) => { m.set(k, null); });
-    }
+    };
   }
+})();
+// Safari doesn't implement MapIterator.next(), which is used is Traceur's polyfill of Array.from
+// TODO(mlaval): remove the work around once we have a working polyfill of Array.from
+var _arrayFromMap: {(m: Map<any, any>, getValues: boolean): any[]} = (function() {
+  try {
+    if ((<any>(new Map()).values()).next) {
+      return function createArrayFromMap(m: Map<any, any>, getValues: boolean): any[] {
+        return getValues ? (<any>Array).from(m.values()) : (<any>Array).from(m.keys());
+      };
+    }
+  } catch (e) {
+  }
+  return function createArrayFromMapWithForeach(m: Map<any, any>, getValues: boolean): any[] {
+    var res = ListWrapper.createFixedSize(m.size), i = 0;
+    m.forEach((v, k) => {
+      res[i] = getValues ? v : k;
+      i++;
+    });
+    return res;
+  };
 })();
 
 export class MapWrapper {
   static clone<K, V>(m: Map<K, V>): Map<K, V> { return createMapFromMap(m); }
-  static createFromStringMap(stringMap): Map<string, any> {
-    var result = new Map();
+  static createFromStringMap<T>(stringMap: {[key: string]: T}): Map<string, T> {
+    var result = new Map<string, T>();
     for (var prop in stringMap) {
       result.set(prop, stringMap[prop]);
     }
     return result;
   }
-  static createFromPairs(pairs: List<any>): Map<any, any> { return createMapFromPairs(pairs); }
-  static forEach<K, V>(m: Map<K, V>, fn: /*(V, K) => void*/ Function) { m.forEach(<any>fn); }
-  static size(m: Map<any, any>): number { return m.size; }
-  static delete<K>(m: Map<K, any>, k: K) { m.delete(k); }
+  static toStringMap<T>(m: Map<string, T>): {[key: string]: T} {
+    var r: {[key: string]: T} = {};
+    m.forEach((v, k) => r[k] = v);
+    return r;
+  }
+  static createFromPairs(pairs: any[]): Map<any, any> { return createMapFromPairs(pairs); }
   static clearValues(m: Map<any, any>) { _clearValues(m); }
   static iterable<T>(m: T): T { return m; }
-  static keys<K>(m: Map<K, any>): List<K> { return (<any>Array).from(m.keys()); }
-  static values<V>(m: Map<any, V>): List<V> { return (<any>Array).from(m.values()); }
+  static keys<K>(m: Map<K, any>): K[] { return _arrayFromMap(m, false); }
+  static values<V>(m: Map<any, V>): V[] { return _arrayFromMap(m, true); }
 }
 
 /**
  * Wraps Javascript Objects
  */
 export class StringMapWrapper {
-  static create(): StringMap<any, any> {
+  static create(): {[k: /*any*/ string]: any} {
     // Note: We are not using Object.create(null) here due to
     // performance!
     // http://jsperf.com/ng2-object-create-null
     return {};
   }
-  static contains(map: StringMap<string, any>, key: string): boolean {
+  static contains(map: {[key: string]: any}, key: string): boolean {
     return map.hasOwnProperty(key);
   }
-  static get<V>(map: StringMap<string, V>, key: string): V {
+  static get<V>(map: {[key: string]: V}, key: string): V {
     return map.hasOwnProperty(key) ? map[key] : undefined;
   }
-  static set<V>(map: StringMap<string, V>, key: string, value: V) { map[key] = value; }
-  static keys(map: StringMap<string, any>): List<string> { return Object.keys(map); }
-  static isEmpty(map: StringMap<string, any>): boolean {
+  static set<V>(map: {[key: string]: V}, key: string, value: V) { map[key] = value; }
+  static keys(map: {[key: string]: any}): string[] { return Object.keys(map); }
+  static isEmpty(map: {[key: string]: any}): boolean {
     for (var prop in map) {
       return false;
     }
     return true;
   }
-  static delete (map: StringMap<string, any>, key: string) { delete map[key]; }
-  static forEach<K, V>(map: StringMap<string, V>, callback: /*(V, K) => void*/ Function) {
+  static delete (map: {[key: string]: any}, key: string) { delete map[key]; }
+  static forEach<K, V>(map: {[key: string]: V}, callback: /*(V, K) => void*/ Function) {
     for (var prop in map) {
       if (map.hasOwnProperty(prop)) {
         callback(map[prop], prop);
@@ -106,8 +131,8 @@ export class StringMapWrapper {
     }
   }
 
-  static merge<V>(m1: StringMap<string, V>, m2: StringMap<string, V>): StringMap<string, V> {
-    var m = {};
+  static merge<V>(m1: {[key: string]: V}, m2: {[key: string]: V}): {[key: string]: V} {
+    var m: {[key: string]: V} = {};
 
     for (var attr in m1) {
       if (m1.hasOwnProperty(attr)) {
@@ -124,7 +149,7 @@ export class StringMapWrapper {
     return m;
   }
 
-  static equals<V>(m1: StringMap<string, V>, m2: StringMap<string, V>): boolean {
+  static equals<V>(m1: {[key: string]: V}, m2: {[key: string]: V}): boolean {
     var k1 = Object.keys(m1);
     var k2 = Object.keys(m2);
     if (k1.length != k2.length) {
@@ -141,71 +166,53 @@ export class StringMapWrapper {
   }
 }
 
+/**
+ * A boolean-valued function over a value, possibly including context information
+ * regarding that value's position in an array.
+ */
 export interface Predicate<T> { (value: T, index?: number, array?: T[]): boolean; }
 
 export class ListWrapper {
-  // JS has no way to express a staticly fixed size list, but dart does so we
+  // JS has no way to express a statically fixed size list, but dart does so we
   // keep both methods.
-  static createFixedSize(size): List<any> { return new List(size); }
-  static createGrowableSize(size): List<any> { return new List(size); }
-  static get(m, k): any { return m[k]; }
-  static set(m, k, v) { m[k] = v; }
-  static clone<T>(array: List<T>): T[] { return array.slice(0); }
-  static map(array, fn): any { return array.map(fn); }
-  static forEach(array: List<any>, fn: Function) {
+  static createFixedSize(size: number): any[] { return new Array(size); }
+  static createGrowableSize(size: number): any[] { return new Array(size); }
+  static clone<T>(array: T[]): T[] { return array.slice(0); }
+  static forEachWithIndex<T>(array: T[], fn: (t: T, n: number) => void) {
     for (var i = 0; i < array.length; i++) {
-      fn(array[i]);
+      fn(array[i], i);
     }
   }
-  static first<T>(array: List<T>): T {
+  static first<T>(array: T[]): T {
     if (!array) return null;
     return array[0];
   }
-  static last<T>(array: List<T>): T {
+  static last<T>(array: T[]): T {
     if (!array || array.length == 0) return null;
     return array[array.length - 1];
   }
-  static find<T>(list: List<T>, pred: Predicate<T>): T {
-    for (var i = 0; i < list.length; ++i) {
-      if (pred(list[i])) return list[i];
-    }
-    return null;
-  }
-  static indexOf(array: List<any>, value, startIndex = 0): number {
+  static indexOf<T>(array: T[], value: T, startIndex: number = 0): number {
     return array.indexOf(value, startIndex);
   }
-  static reduce<T, E>(list: List<T>,
-                      fn: (accumValue: E, currentValue: T, currentIndex: number, array: T[]) => E,
-                      init: E): E {
-    return list.reduce(fn, init);
-  }
-  static filter<T>(array: List<T>, pred: Predicate<T>): T[] { return array.filter(pred); }
-  static any(list: List<any>, pred: Function): boolean {
-    for (var i = 0; i < list.length; ++i) {
-      if (pred(list[i])) return true;
-    }
-    return false;
-  }
-  static contains(list: List<any>, el): boolean { return list.indexOf(el) !== -1; }
-  static reversed<T>(array: List<T>): T[] {
+  static contains<T>(list: T[], el: T): boolean { return list.indexOf(el) !== -1; }
+  static reversed<T>(array: T[]): T[] {
     var a = ListWrapper.clone(array);
     return a.reverse();
   }
-  static concat(a, b): List<any> { return a.concat(b); }
-  static insert(list, index: int, value) { list.splice(index, 0, value); }
-  static removeAt<T>(list: List<T>, index: int): T {
+  static concat(a: any[], b: any[]): any[] { return a.concat(b); }
+  static insert<T>(list: T[], index: number, value: T) { list.splice(index, 0, value); }
+  static removeAt<T>(list: T[], index: number): T {
     var res = list[index];
     list.splice(index, 1);
     return res;
   }
-  static removeAll(list, items) {
+  static removeAll<T>(list: T[], items: T[]) {
     for (var i = 0; i < items.length; ++i) {
       var index = list.indexOf(items[i]);
       list.splice(index, 1);
     }
   }
-  static removeLast<T>(list: List<T>): T { return list.pop(); }
-  static remove(list, el): boolean {
+  static remove<T>(list: T[], el: T): boolean {
     var index = list.indexOf(el);
     if (index > -1) {
       list.splice(index, 1);
@@ -213,70 +220,82 @@ export class ListWrapper {
     }
     return false;
   }
-  static clear(list) { list.splice(0, list.length); }
-  static join(list, s: string): string { return list.join(s); }
-  static isEmpty(list): boolean { return list.length == 0; }
-  static fill(list: List<any>, value, start: int = 0, end: int = null) {
-    list.fill(value, start, end === null ? undefined : end);
+  static clear(list: any[]) { list.length = 0; }
+  static isEmpty(list: any[]): boolean { return list.length == 0; }
+  static fill(list: any[], value: any, start: number = 0, end: number = null) {
+    list.fill(value, start, end === null ? list.length : end);
   }
-  static equals(a: List<any>, b: List<any>): boolean {
+  static equals(a: any[], b: any[]): boolean {
     if (a.length != b.length) return false;
     for (var i = 0; i < a.length; ++i) {
       if (a[i] !== b[i]) return false;
     }
     return true;
   }
-  static slice<T>(l: List<T>, from: int = 0, to: int = null): List<T> {
+  static slice<T>(l: T[], from: number = 0, to: number = null): T[] {
     return l.slice(from, to === null ? undefined : to);
   }
-  static splice<T>(l: List<T>, from: int, length: int): List<T> { return l.splice(from, length); }
-  static sort<T>(l: List<T>, compareFn?: (a: T, b: T) => number) {
+  static splice<T>(l: T[], from: number, length: number): T[] { return l.splice(from, length); }
+  static sort<T>(l: T[], compareFn?: (a: T, b: T) => number) {
     if (isPresent(compareFn)) {
       l.sort(compareFn);
     } else {
       l.sort();
     }
   }
-  static toString<T>(l: List<T>): string { return l.toString(); }
-  static toJSON<T>(l: List<T>): string { return JSON.stringify(l); }
+  static toString<T>(l: T[]): string { return l.toString(); }
+  static toJSON<T>(l: T[]): string { return JSON.stringify(l); }
+
+  static maximum<T>(list: T[], predicate: (t: T) => number): T {
+    if (list.length == 0) {
+      return null;
+    }
+    var solution = null;
+    var maxValue = -Infinity;
+    for (var index = 0; index < list.length; index++) {
+      var candidate = list[index];
+      if (isBlank(candidate)) {
+        continue;
+      }
+      var candidateValue = predicate(candidate);
+      if (candidateValue > maxValue) {
+        solution = candidate;
+        maxValue = candidateValue;
+      }
+    }
+    return solution;
+  }
 }
 
-export function isListLikeIterable(obj): boolean {
+export function isListLikeIterable(obj: any): boolean {
   if (!isJsObject(obj)) return false;
   return isArray(obj) ||
-         (!(obj instanceof Map) &&  // JS Map are iterables but return entries as [k, v]
-          Symbol.iterator in obj);  // JS Iterable have a Symbol.iterator prop
+         (!(obj instanceof Map) &&      // JS Map are iterables but return entries as [k, v]
+          getSymbolIterator() in obj);  // JS Iterable have a Symbol.iterator prop
 }
 
-export function iterateListLike(obj, fn: Function) {
+export function iterateListLike(obj: any, fn: Function) {
   if (isArray(obj)) {
     for (var i = 0; i < obj.length; i++) {
       fn(obj[i]);
     }
   } else {
-    var iterator = obj[Symbol.iterator]();
+    var iterator = obj[getSymbolIterator()]();
     var item;
     while (!((item = iterator.next()).done)) {
       fn(item.value);
     }
   }
 }
-export function iterableToList<T>(ii: any): List<T> {
-  var res = [];
-  for (var i of ii) {
-    res.push(i);
-  }
-  return res;
-}
 
 // Safari and Internet Explorer do not support the iterable parameter to the
 // Set constructor.  We work around that by manually adding the items.
-var createSetFromList: {(lst: List<any>): Set<any>} = (function() {
+var createSetFromList: {(lst: any[]): Set<any>} = (function() {
   var test = new Set([1, 2, 3]);
   if (test.size === 3) {
-    return function createSetFromList(lst: List<any>): Set<any> { return new Set(lst); };
+    return function createSetFromList(lst: any[]): Set<any> { return new Set(lst); };
   } else {
-    return function createSetAndPopulateFromList(lst: List<any>): Set<any> {
+    return function createSetAndPopulateFromList(lst: any[]): Set<any> {
       var res = new Set(lst);
       if (res.size !== lst.length) {
         for (var i = 0; i < lst.length; i++) {
@@ -288,6 +307,7 @@ var createSetFromList: {(lst: List<any>): Set<any>} = (function() {
   }
 })();
 export class SetWrapper {
-  static createFromList<T>(lst: List<T>): Set<T> { return createSetFromList(lst); }
+  static createFromList<T>(lst: T[]): Set<T> { return createSetFromList(lst); }
   static has<T>(s: Set<T>, key: T): boolean { return s.has(key); }
+  static delete<K>(m: Set<K>, k: K) { m.delete(k); }
 }

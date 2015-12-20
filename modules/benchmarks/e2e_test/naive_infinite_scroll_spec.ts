@@ -1,4 +1,4 @@
-import {verifyNoBrowserErrors} from 'angular2/src/test_lib/e2e_util';
+import {verifyNoBrowserErrors} from 'angular2/src/testing/e2e_util';
 
 describe('ng2 naive infinite scroll benchmark', function() {
 
@@ -9,7 +9,7 @@ describe('ng2 naive infinite scroll benchmark', function() {
   it('should not throw errors', function() {
     browser.get(URL);
     var expectedRowCount = 18;
-    var expectedCellsPerRow = 28;
+    var expectedCellsPerRow = 27;
     var allScrollItems = 'scroll-app #testArea scroll-item';
     var cells = `${ allScrollItems } .row *`;
     var stageButtons = `${ allScrollItems } .row stage-buttons button`;

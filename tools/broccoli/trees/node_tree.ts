@@ -2,7 +2,6 @@
 
 import destCopy from '../broccoli-dest-copy';
 import compileWithTypescript from '../broccoli-typescript';
-import transpileWithTraceur from '../traceur/index';
 var Funnel = require('broccoli-funnel');
 import mergeTrees from '../broccoli-merge-trees';
 var path = require('path');
@@ -13,41 +12,57 @@ var stew = require('broccoli-stew');
 var projectRootDir = path.normalize(path.join(__dirname, '..', '..', '..', '..'));
 
 
-module.exports = function makeNodeTree(destinationPath) {
+module.exports = function makeNodeTree(projects, destinationPath) {
   // list of npm packages that this build will create
-  var outputPackages = ['angular2', 'benchpress', 'rtts_assert'];
+  var outputPackages = ['angular2', 'benchpress'];
 
   var modulesTree = new Funnel('modules', {
-    include: ['angular2/**', 'benchpress/**', 'rtts_assert/**', '**/e2e_test/**'],
+    include: ['angular2/**', 'benchpress/**', '**/e2e_test/**'],
     exclude: [
       // the following code and tests are not compatible with CJS/node environment
+      'angular2/test/animate/**',
       'angular2/test/core/zone/**',
-      'angular2/test/test_lib/fake_async_spec.ts',
-      'angular2/test/render/xhr_impl_spec.ts',
-      'angular2/test/forms/**'
+      'angular2/test/testing/fake_async_spec.ts',
+      'angular2/test/testing/testing_public_spec.ts',
+      'angular2/test/platform/xhr_impl_spec.ts',
+      'angular2/test/platform/browser/**/*.ts',
+      'angular2/test/common/forms/**',
+
+      // we call browser's bootstrap
+      'angular2/test/router/route_config_spec.ts',
+      'angular2/test/router/integration/bootstrap_spec.ts',
+
+      // we check the public api by importing angular2/angular2
+      'angular2/test/symbol_inspector/**/*.ts',
+      'angular2/test/public_api_spec.ts',
+
+      'angular2/test/upgrade/**/*.ts',
+
+      'angular1_router/**',
+      'angular2/examples/**/!(*_spec.ts)',
     ]
   });
 
-  var nodeTree = transpileWithTraceur(modulesTree, {
-    destExtension: '.js',
-    destSourceMapExtension: '.map',
-    traceurOptions: {
-      sourceMaps: true,
-      annotations: true,      // parse annotations
-      types: true,            // parse types
-      script: false,          // parse as a module
-      memberVariables: true,  // parse class fields
-      typeAssertionModule: 'rtts_assert/rtts_assert',
-      // Don't use type assertions since this is partly transpiled by typescript
-      typeAssertions: false,
-      modules: 'commonjs'
-    }
+  var typescriptTree = compileWithTypescript(modulesTree, {
+    emitDecoratorMetadata: true,
+    experimentalDecorators: true,
+    declaration: true,
+    stripInternal: true,
+    module: 'commonjs',
+    moduleResolution: 'classic',
+    noEmitOnError: true,
+    rootDir: '.',
+    rootFilePaths:
+        ['angular2/manual_typings/globals.d.ts', 'angular2/typings/es6-shim/es6-shim.d.ts'],
+    inlineSourceMap: true,
+    inlineSources: true,
+    target: 'es5'
   });
 
   // Now we add the LICENSE file into all the folders that will become npm packages
   outputPackages.forEach(function(destDir) {
     var license = new Funnel('.', {files: ['LICENSE'], destDir: destDir});
-    nodeTree = mergeTrees([nodeTree, license]);
+    typescriptTree = mergeTrees([typescriptTree, license]);
   });
 
   // Get all docs and related assets and prepare them for js build
@@ -61,78 +76,56 @@ module.exports = function makeNodeTree(destinationPath) {
     homepage: BASE_PACKAGE_JSON.homepage,
     bugs: BASE_PACKAGE_JSON.bugs,
     license: BASE_PACKAGE_JSON.license,
+    repository: BASE_PACKAGE_JSON.repository,
     contributors: BASE_PACKAGE_JSON.contributors,
     dependencies: BASE_PACKAGE_JSON.dependencies,
     devDependencies: BASE_PACKAGE_JSON.devDependencies,
-    defaultDevDependencies: {
-      "yargs": BASE_PACKAGE_JSON.devDependencies['yargs'],
-      "gulp-sourcemaps": BASE_PACKAGE_JSON.devDependencies['gulp-sourcemaps'],
-      "gulp-traceur": BASE_PACKAGE_JSON.devDependencies['gulp-traceur'],
-      "gulp": BASE_PACKAGE_JSON.devDependencies['gulp'],
-      "gulp-rename": BASE_PACKAGE_JSON.devDependencies['gulp-rename'],
-      "through2": BASE_PACKAGE_JSON.devDependencies['through2']
-    }
+    defaultDevDependencies: {}
   };
 
   var packageJsons = new Funnel(modulesTree, {include: ['**/package.json']});
   packageJsons =
       renderLodashTemplate(packageJsons, {context: {'packageJson': COMMON_PACKAGE_JSON}});
 
-  // HACK: workaround for Traceur behavior.
-  // It expects all transpiled modules to contain this marker.
-  // TODO: remove this when we no longer use traceur
-  var traceurCompatibleTsModulesTree = replace(modulesTree, {
-    files: ['**/*.ts'],
-    patterns: [
-      {
-        match: /$/,
-        replacement: function(_, relativePath) {
-          var content = "";  // we're matching an empty line
-          if (!relativePath.endsWith('.d.ts')) {
-            content += '\r\nexport var __esModule = true;\n';
-          }
-          return content;
-        }
-      }
-    ]
-  });
-
-  var typescriptTree = compileWithTypescript(traceurCompatibleTsModulesTree, {
-    allowNonTsExtensions: false,
-    emitDecoratorMetadata: true,
-    declaration: true,
-    mapRoot: '', /* force sourcemaps to use relative path */
-    module: 'commonjs',
-    noEmitOnError: true,
-    rootDir: '.',
-    rootFilePaths: ['angular2/traceur-runtime.d.ts', 'angular2/globals.d.ts'],
-    sourceMap: true,
-    sourceRoot: '.',
-    target: 'ES5'
-  });
-
-  nodeTree = mergeTrees([nodeTree, typescriptTree, docs, packageJsons]);
+  var typingsTree = new Funnel(
+      'modules',
+      {include: ['angular2/typings/**/*.d.ts', 'angular2/manual_typings/*.d.ts'], destDir: '/'});
+  var nodeTree = mergeTrees([typescriptTree, docs, packageJsons, typingsTree]);
 
   // Transform all tests to make them runnable in node
   nodeTree = replace(nodeTree, {
     files: ['**/test/**/*_spec.js'],
     patterns: [
       {
-        match: /$/,
-        replacement: function(_, relativePath) {
-          return "\r\n main(); \n\r" +
-                 "var parse5Adapter = require('angular2/src/dom/parse5_adapter'); " +
-                 "parse5Adapter.Parse5DomAdapter.makeCurrent();";
-        }
-      }
+        match: /^/,
+        replacement:
+            () =>
+                `var parse5Adapter = require('angular2/src/platform/server/parse5_adapter');\r\n` +
+                `parse5Adapter.Parse5DomAdapter.makeCurrent();`
+      },
+      {match: /$/, replacement: (_, relativePath) => "\r\n main(); \r\n"}
     ]
   });
 
   // Prepend 'use strict' directive to all JS files.
   // See https://github.com/Microsoft/TypeScript/issues/3576
+  nodeTree = replace(
+      nodeTree, {files: ['**/*.js'], patterns: [{match: /^/, replacement: () => `'use strict';`}]});
+
+  // Add a line to the end of our top-level .d.ts file.
+  // This HACK for transitive typings is a workaround for
+  // https://github.com/Microsoft/TypeScript/issues/5097
+  //
+  // This allows users to get our top-level dependencies like zone.d.ts
+  // to appear when they compile against angular2.
+  //
+  // This carries the risk that the user brings their own copy of that file
+  // (or any other symbols exported here) and they will get a compiler error
+  // because of the duplicate definitions.
+  // TODO(alexeagle): remove this when typescript releases a fix
   nodeTree = replace(nodeTree, {
-    files: ['**/*.js'],
-    patterns: [{match: /^/, replacement: function() { return `'use strict';` }}]
+    files: ['angular2/core.d.ts'],
+    patterns: [{match: /$/, replacement: 'import "./manual_typings/globals-es6.d.ts";\r\n'}]
   });
 
   return destCopy(nodeTree, destinationPath);

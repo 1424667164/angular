@@ -1,6 +1,5 @@
-///<reference path="../dist/docs/typings/angular2/angular2.d.ts"/>
-
-import {Component, bootstrap, View} from 'angular2/angular2'
+import {Component, View} from 'angular2/core';
+import {bootstrap} from 'angular2/platform/browser';
 
 @Component({
   selector: 'my-app'

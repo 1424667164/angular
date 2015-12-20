@@ -1,7 +1,7 @@
-import {ListWrapper, MapWrapper} from 'angular2/src/facade/collection';
+import {ListWrapper} from 'angular2/src/facade/collection';
 import {Math} from 'angular2/src/facade/math';
 
-import {Component, Directive, View} from 'angular2/angular2';
+import {Component, Directive, View} from 'angular2/core';
 
 import {
   Offering,
@@ -14,7 +14,7 @@ import {
 } from './common';
 import {generateOfferings} from './random_data';
 import {ScrollItemComponent} from './scroll_item';
-import {NgFor} from 'angular2/directives';
+import {NgFor} from 'angular2/common';
 
 @Component({
   selector: 'scroll-area',
@@ -24,12 +24,13 @@ import {NgFor} from 'angular2/directives';
   template: `
     <div>
         <div id="scrollDiv"
-             [style]="scrollDivStyle"
+             [style.height.px]="viewPortHeight"
+             style="width: 1000px; border: 1px solid #000; overflow: scroll"
              on-scroll="onScroll($event)">
             <div id="padding"></div>
             <div id="inner">
                 <scroll-item
-                    template="ng-for #item of visibleItems"
+                    template="ngFor #item of visibleItems"
                     [offering]="item">
                 </scroll-item>
             </div>
@@ -37,22 +38,17 @@ import {NgFor} from 'angular2/directives';
     </div>`
 })
 export class ScrollAreaComponent {
-  _fullList: List<Offering>;
-  visibleItems: List<Offering>;
+  _fullList: Offering[];
+  visibleItems: Offering[];
 
-  scrollDivStyle;
+  viewPortHeight: number;
   paddingDiv;
   innerDiv;
 
   constructor() {
     this._fullList = generateOfferings(ITEMS);
     this.visibleItems = [];
-    this.scrollDivStyle = MapWrapper.createFromPairs([
-      ['height', `${VIEW_PORT_HEIGHT}px`],
-      ['width', '1000px'],
-      ['border', '1px solid #000'],
-      ['overflow', 'scroll']
-    ]);
+    this.viewPortHeight = VIEW_PORT_HEIGHT;
     this.onScroll(null);
   }
 

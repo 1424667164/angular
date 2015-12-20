@@ -1,8 +1,8 @@
 import {print, isPresent, isBlank, NumberWrapper} from 'angular2/src/facade/lang';
-import {StringMapWrapper, ListWrapper, List} from 'angular2/src/facade/collection';
+import {StringMapWrapper, ListWrapper} from 'angular2/src/facade/collection';
 import {Promise, PromiseWrapper} from 'angular2/src/facade/async';
 import {Math} from 'angular2/src/facade/math';
-import {bind, Binding, OpaqueToken} from 'angular2/di';
+import {bind, provide, Provider, OpaqueToken} from 'angular2/src/core/di';
 
 import {Statistic} from '../statistic';
 import {Reporter} from '../reporter';
@@ -18,7 +18,7 @@ export class ConsoleReporter extends Reporter {
   // TODO(tbosch): use static values when our transpiler supports them
   static get COLUMN_WIDTH(): OpaqueToken { return _COLUMN_WIDTH; }
   // TODO(tbosch): use static values when our transpiler supports them
-  static get BINDINGS(): List<Binding> { return _BINDINGS; }
+  static get BINDINGS(): Provider[] { return _PROVIDERS; }
 
 
   static _lpad(value, columnWidth, fill = ' ') {
@@ -38,7 +38,7 @@ export class ConsoleReporter extends Reporter {
     return props;
   }
 
-  private _metricNames: List<string>;
+  private _metricNames: string[];
 
   constructor(private _columnWidth: number, sampleDescription, private _print: Function) {
     super();
@@ -61,7 +61,7 @@ export class ConsoleReporter extends Reporter {
   }
 
   reportMeasureValues(measureValues: MeasureValues): Promise<any> {
-    var formattedValues = ListWrapper.map(this._metricNames, (metricName) => {
+    var formattedValues = this._metricNames.map(metricName => {
       var value = measureValues.values[metricName];
       return ConsoleReporter._formatNum(value);
     });
@@ -69,14 +69,12 @@ export class ConsoleReporter extends Reporter {
     return PromiseWrapper.resolve(null);
   }
 
-  reportSample(completeSample: List<MeasureValues>,
-               validSample: List<MeasureValues>): Promise<any> {
+  reportSample(completeSample: MeasureValues[], validSamples: MeasureValues[]): Promise<any> {
     this._printStringRow(this._metricNames.map((_) => ''), '=');
-    this._printStringRow(ListWrapper.map(this._metricNames, (metricName) => {
-      var sample =
-          ListWrapper.map(validSample, (measureValues) => measureValues.values[metricName]);
-      var mean = Statistic.calculateMean(sample);
-      var cv = Statistic.calculateCoefficientOfVariation(sample, mean);
+    this._printStringRow(this._metricNames.map(metricName => {
+      var samples = validSamples.map(measureValues => measureValues.values[metricName]);
+      var mean = Statistic.calculateMean(samples);
+      var cv = Statistic.calculateCoefficientOfVariation(samples, mean);
       var formattedMean = ConsoleReporter._formatNum(mean)
                               // Note: Don't use the unicode character for +- as it might cause
                               // hickups for consoles...
@@ -87,21 +85,19 @@ export class ConsoleReporter extends Reporter {
     return PromiseWrapper.resolve(null);
   }
 
-  _printStringRow(parts, fill = ' ') {
-    this._print(ListWrapper.map(parts, (part) => {
-                             var w = this._columnWidth;
-                             return ConsoleReporter._lpad(part, w, fill);
-                           }).join(' | '));
+  _printStringRow(parts: any[], fill = ' ') {
+    this._print(
+        parts.map(part => ConsoleReporter._lpad(part, this._columnWidth, fill)).join(' | '));
   }
 }
 
 var _PRINT = new OpaqueToken('ConsoleReporter.print');
 var _COLUMN_WIDTH = new OpaqueToken('ConsoleReporter.columnWidth');
-var _BINDINGS = [
+var _PROVIDERS = [
   bind(ConsoleReporter)
       .toFactory((columnWidth, sampleDescription, print) =>
                      new ConsoleReporter(columnWidth, sampleDescription, print),
                  [_COLUMN_WIDTH, SampleDescription, _PRINT]),
-  bind(_COLUMN_WIDTH).toValue(18),
-  bind(_PRINT).toValue(print)
+  provide(_COLUMN_WIDTH, {useValue: 18}),
+  provide(_PRINT, {useValue: print})
 ];

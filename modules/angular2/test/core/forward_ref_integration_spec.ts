@@ -1,7 +1,6 @@
 import {
   AsyncTestCompleter,
   TestComponentBuilder,
-  asNativeElements,
   beforeEach,
   ddescribe,
   describe,
@@ -10,11 +9,22 @@ import {
   inject,
   it,
   xit
-} from 'angular2/test_lib';
-import {Directive, Component, Query, View} from 'angular2/annotations';
-import {QueryList, NgFor} from 'angular2/angular2';
-import {forwardRef, resolveForwardRef, bind, Inject} from 'angular2/di';
+} from 'angular2/testing_internal';
+import {
+  bind,
+  provide,
+  forwardRef,
+  resolveForwardRef,
+  Component,
+  Directive,
+  Inject,
+  Query,
+  QueryList,
+  View
+} from 'angular2/core';
+import {NgFor} from 'angular2/common';
 import {Type} from 'angular2/src/facade/lang';
+import {asNativeElements} from 'angular2/core';
 
 export function main() {
   describe("forwardRef integration", function() {
@@ -22,29 +32,26 @@ export function main() {
        inject([TestComponentBuilder, AsyncTestCompleter], (tcb: TestComponentBuilder, async) => {
          tcb.createAsync(App).then((tc) => {
            tc.detectChanges();
-           expect(asNativeElements(tc.componentViewChildren)).toHaveText('frame(lock)');
+           expect(asNativeElements(tc.debugElement.componentViewChildren))
+               .toHaveText('frame(lock)');
            async.done();
          });
        }));
   });
 }
 
-@Component({selector: 'app', viewInjector: [forwardRef(() => Frame)]})
+@Component({selector: 'app', viewProviders: [forwardRef(() => Frame)]})
 @View({
   template: `<door><lock></lock></door>`,
-  directives: [
-    bind(forwardRef(() => Door))
-        .toClass(forwardRef(() => Door)),
-    bind(forwardRef(() => Lock)).toClass(forwardRef(() => Lock))
-  ]
+  directives: [forwardRef(() => Door), forwardRef(() => Lock)],
 })
 class App {
 }
 
-@Component({selector: 'Lock'})
+@Component({selector: 'lock'})
 @View({
   directives: [NgFor],
-  template: `{{frame.name}}(<span *ng-for="var lock of locks">{{lock.name}}</span>)`
+  template: `{{frame.name}}(<span *ngFor="var lock of locks">{{lock.name}}</span>)`,
 })
 class Door {
   locks: QueryList<Lock>;

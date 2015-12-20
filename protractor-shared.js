@@ -38,7 +38,7 @@ var browsers = argv['browsers'].split(',');
 var CHROME_OPTIONS = {
   'args': ['--js-flags=--expose-gc'],
   'perfLoggingPrefs': {
-    'traceCategories': 'v8,blink.console,disabled-by-default-devtools.timeline'
+    'traceCategories': 'v8,blink.console,devtools.timeline,disabled-by-default-devtools.timeline'
   }
 };
 
@@ -132,7 +132,7 @@ var config = exports.config = {
     // TODO(juliemr): remove this hack and use the config option
     // restartBrowserBetweenTests once that is not hanging.
     // See https://github.com/angular/protractor/issues/1983
-    patchProtractorWait(browser);
+    //
     // During benchmarking, we need to open a new browser
     // for every benchmark, otherwise the numbers can get skewed
     // from other benchmarks (e.g. Chrome keeps JIT caches, ...)
@@ -141,7 +141,6 @@ var config = exports.config = {
       var _tmpBrowser;
       beforeEach(function() {
         global.browser = originalBrowser.forkNewDriverInstance();
-        patchProtractorWait(global.browser);
         global.element = global.browser.element;
         global.$ = global.browser.$;
         global.$$ = global.browser.$$;
@@ -170,6 +169,8 @@ var config = exports.config = {
 
   framework: 'jasmine2',
 
+  useAllAngular2AppRoots: true,
+
   jasmineNodeOpts: {
     showColors: true,
     defaultTimeoutInterval: argv['benchmark'] ? 1200000 : 60000
@@ -182,20 +183,6 @@ var config = exports.config = {
     }
   }
 };
-
-// Disable waiting for Angular as we don't have an integration layer yet...
-// TODO(tbosch): Implement a proper debugging API for Ng2.0, remove this here
-// and the sleeps in all tests.
-function patchProtractorWait(browser) {
-  browser.ignoreSynchronization = true;
-  var _get = browser.get;
-  var sleepInterval = process.env.TRAVIS || process.env.JENKINS_URL ? 7000 : 3000;
-  browser.get = function() {
-    var result = _get.apply(this, arguments);
-    browser.sleep(sleepInterval);
-    return result;
-  }
-}
 
 exports.createBenchpressRunner = function(options) {
   // benchpress will also load traceur runtime as our tests are written in es6
@@ -225,10 +212,8 @@ exports.createBenchpressRunner = function(options) {
   var bindings = [
     benchpress.SeleniumWebDriverAdapter.PROTRACTOR_BINDINGS,
     benchpress.bind(benchpress.Options.FORCE_GC).toValue(argv['force-gc']),
-    benchpress.bind(benchpress.Options.DEFAULT_DESCRIPTION).toValue({
-      'lang': options.lang,
-      'runId': runId
-    }),
+    benchpress.bind(benchpress.Options.DEFAULT_DESCRIPTION)
+        .toValue({'lang': options.lang, 'runId': runId}),
     benchpress.JsonFileReporter.BINDINGS,
     benchpress.bind(benchpress.JsonFileReporter.PATH).toValue(resultsFolder)
   ];

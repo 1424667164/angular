@@ -1,11 +1,11 @@
-import {bind, Binding} from 'angular2/di';
+import {bind, provide, Provider} from 'angular2/src/core/di';
 import {isPresent, StringWrapper} from 'angular2/src/facade/lang';
 import {WebDriverExtension, PerfLogFeatures} from '../web_driver_extension';
 import {WebDriverAdapter} from '../web_driver_adapter';
 import {Promise} from 'angular2/src/facade/async';
 
 export class FirefoxDriverExtension extends WebDriverExtension {
-  static get BINDINGS(): List<Binding> { return _BINDINGS; }
+  static get BINDINGS(): Provider[] { return _PROVIDERS; }
 
   private _profilerStarted: boolean;
 
@@ -38,12 +38,12 @@ export class FirefoxDriverExtension extends WebDriverExtension {
 
   perfLogFeatures(): PerfLogFeatures { return new PerfLogFeatures({render: true, gc: true}); }
 
-  supports(capabilities: StringMap<string, any>): boolean {
+  supports(capabilities: {[key: string]: any}): boolean {
     return StringWrapper.equals(capabilities['browserName'].toLowerCase(), 'firefox');
   }
 }
 
-var _BINDINGS = [
+var _PROVIDERS = [
   bind(FirefoxDriverExtension)
       .toFactory((driver) => new FirefoxDriverExtension(driver), [WebDriverAdapter])
 ];

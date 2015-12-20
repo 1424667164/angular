@@ -1,11 +1,19 @@
-import {bootstrap, Compiler, Component, Directive, View, ViewContainerRef} from 'angular2/angular2';
+import {bootstrap} from 'angular2/bootstrap';
+import {
+  Compiler,
+  Component,
+  Directive,
+  View,
+  ViewContainerRef,
+  bind,
+  provide,
+  Provider
+} from 'angular2/core';
+import {NgIf} from 'angular2/common';
 
-import {LifeCycle} from 'angular2/src/core/life_cycle/life_cycle';
-import {reflector} from 'angular2/src/reflection/reflection';
-import {ReflectionCapabilities} from 'angular2/src/reflection/reflection_capabilities';
-import {DOM} from 'angular2/src/dom/dom_adapter';
+import {ApplicationRef} from 'angular2/src/core/application_ref';
+import {DOM} from 'angular2/src/platform/dom/dom_adapter';
 import {isPresent} from 'angular2/src/facade/lang';
-import {List} from 'angular2/src/facade/collection';
 import {window, document, gc} from 'angular2/src/facade/browser';
 import {
   getIntParameter,
@@ -13,19 +21,13 @@ import {
   bindAction,
   windowProfile,
   windowProfileEnd
-} from 'angular2/src/test_lib/benchmark_util';
-import {NgIf} from 'angular2/directives';
-import {BrowserDomAdapter} from 'angular2/src/dom/browser_adapter';
-import {APP_VIEW_POOL_CAPACITY} from 'angular2/src/core/compiler/view_pool';
-import {bind, Binding} from 'angular2/di';
+} from 'angular2/src/testing/benchmark_util';
+import {BrowserDomAdapter} from 'angular2/src/platform/browser/browser_adapter';
+import {APP_VIEW_POOL_CAPACITY} from 'angular2/src/core/linker/view_pool';
 
-function createBindings(): List<Binding> {
+function createProviders(): Provider[] {
   var viewCacheCapacity = getStringParameter('viewcache') == 'true' ? 10000 : 1;
-  return [bind(APP_VIEW_POOL_CAPACITY).toValue(viewCacheCapacity)];
-}
-
-function setupReflector() {
-  reflector.reflectionCapabilities = new ReflectionCapabilities();
+  return [provide(APP_VIEW_POOL_CAPACITY, {useValue: viewCacheCapacity})];
 }
 
 var BASELINE_TREE_TEMPLATE;
@@ -35,14 +37,12 @@ export function main() {
   BrowserDomAdapter.makeCurrent();
   var maxDepth = getIntParameter('depth');
 
-  setupReflector();
-
   BASELINE_TREE_TEMPLATE = DOM.createTemplate(
-      '<span>_<template class="ng-binding"></template><template class="ng-binding"></template></span>');
+      '<span>_<template class="ng-provider"></template><template class="ng-provider"></template></span>');
   BASELINE_IF_TEMPLATE = DOM.createTemplate('<span template="if"><tree></tree></span>');
 
   var app;
-  var lifeCycle;
+  var appRef;
   var baselineRootTreeComponent;
   var count = 0;
 
@@ -50,7 +50,7 @@ export function main() {
     // TODO: We need an initial value as otherwise the getter for data.value will fail
     // --> this should be already caught in change detection!
     app.initData = new TreeNode('', null, null);
-    lifeCycle.tick();
+    appRef.tick();
   }
 
   function profile(create, destroy, name) {
@@ -86,16 +86,16 @@ export function main() {
     var values = count++ % 2 == 0 ? ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '*'] :
                                     ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', '-'];
     app.initData = buildTree(maxDepth, values, 0);
-    lifeCycle.tick();
+    appRef.tick();
   }
 
   function noop() {}
 
   function initNg2() {
-    bootstrap(AppComponent, createBindings())
+    bootstrap(AppComponent, createProviders())
         .then((ref) => {
           var injector = ref.injector;
-          lifeCycle = injector.get(LifeCycle);
+          appRef = injector.get(ApplicationRef);
 
           app = ref.hostComponent;
           bindAction('#ng2DestroyDom', ng2DestroyDom);
@@ -208,7 +208,7 @@ class BaseLineIf {
         this.component = null;
       }
       if (this.condition) {
-        var element = DOM.firstChild(DOM.clone(BASELINE_IF_TEMPLATE).content);
+        var element = DOM.firstChild((<any>DOM.clone(BASELINE_IF_TEMPLATE)).content);
         this.anchor.parentNode.insertBefore(element, DOM.nextSibling(this.anchor));
         this.component = new BaseLineTreeComponent(DOM.firstChild(element));
       }
@@ -219,11 +219,11 @@ class BaseLineIf {
   }
 }
 
-@Component({selector: 'tree', properties: ['data']})
+@Component({selector: 'tree', inputs: ['data']})
 @View({
   directives: [TreeComponent, NgIf],
   template:
-      `<span> {{data.value}} <span template='ng-if data.right != null'><tree [data]='data.right'></tree></span><span template='ng-if data.left != null'><tree [data]='data.left'></tree></span></span>`
+      `<span> {{data.value}} <span template='ngIf data.right != null'><tree [data]='data.right'></tree></span><span template='ngIf data.left != null'><tree [data]='data.left'></tree></span></span>`
 })
 class TreeComponent {
   data: TreeNode;

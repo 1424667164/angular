@@ -1,6 +1,5 @@
-import {bind} from 'angular2/di';
-import {List, StringMap} from 'angular2/src/facade/collection';
-import {ABSTRACT, BaseException} from 'angular2/src/facade/lang';
+import {bind, provide, Provider} from 'angular2/src/core/di';
+import {BaseException, WrappedException} from 'angular2/src/facade/exceptions';
 
 import {MeasureValues} from './measure_values';
 
@@ -9,22 +8,19 @@ import {MeasureValues} from './measure_values';
  * A valid sample is a sample that represents the population that should be observed
  * in the correct way.
  */
-@ABSTRACT()
-export class Validator {
-  static bindTo(delegateToken) {
+export abstract class Validator {
+  static bindTo(delegateToken): Provider[] {
     return [bind(Validator).toFactory((delegate) => delegate, [delegateToken])];
   }
 
   /**
    * Calculates a valid sample out of the complete sample
    */
-  validate(completeSample: List<MeasureValues>): List<MeasureValues> {
-    throw new BaseException('NYI');
-  }
+  validate(completeSample: MeasureValues[]): MeasureValues[] { throw new BaseException('NYI'); }
 
   /**
    * Returns a Map that describes the properties of the validator
    * (e.g. sample size, ...)
    */
-  describe(): StringMap<string, any> { throw new BaseException('NYI'); }
+  describe(): {[key: string]: any} { throw new BaseException('NYI'); }
 }

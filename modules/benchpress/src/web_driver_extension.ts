@@ -1,8 +1,8 @@
-import {bind, Binding, Injector, OpaqueToken} from 'angular2/di';
+import {bind, provide, Provider, Injector, OpaqueToken} from 'angular2/src/core/di';
 
-import {BaseException, ABSTRACT, isBlank, isPresent} from 'angular2/src/facade/lang';
+import {isBlank, isPresent} from 'angular2/src/facade/lang';
+import {BaseException, WrappedException} from 'angular2/src/facade/exceptions';
 import {Promise, PromiseWrapper} from 'angular2/src/facade/async';
-import {List, ListWrapper, StringMap} from 'angular2/src/facade/collection';
 
 import {Options} from './common_options';
 
@@ -11,19 +11,17 @@ import {Options} from './common_options';
  * for a given browser, independent of the WebDriverAdapter.
  * Needs one implementation for every supported Browser.
  */
-@ABSTRACT()
-export class WebDriverExtension {
-  static bindTo(childTokens): List<Binding> {
+export abstract class WebDriverExtension {
+  static bindTo(childTokens: any[]): Provider[] {
     var res = [
       bind(_CHILDREN)
-          .toFactory(
-              (injector: Injector) => ListWrapper.map(childTokens, (token) => injector.get(token)),
-              [Injector]),
+          .toFactory((injector: Injector) => childTokens.map(token => injector.get(token)),
+                     [Injector]),
       bind(WebDriverExtension)
           .toFactory(
-              (children, capabilities) => {
+              (children: WebDriverExtension[], capabilities) => {
                 var delegate;
-                ListWrapper.forEach(children, (extension) => {
+                children.forEach(extension => {
                   if (extension.supports(capabilities)) {
                     delegate = extension;
                   }
@@ -57,25 +55,26 @@ export class WebDriverExtension {
    * Based on [Chrome Trace Event
    *Format](https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/edit)
    **/
-  readPerfLog(): Promise<List<any>> { throw new BaseException('NYI'); }
+  readPerfLog(): Promise<any[]> { throw new BaseException('NYI'); }
 
   perfLogFeatures(): PerfLogFeatures { throw new BaseException('NYI'); }
 
-  supports(capabilities: StringMap<string, any>): boolean { return true; }
+  supports(capabilities: {[key: string]: any}): boolean { return true; }
 }
 
 export class PerfLogFeatures {
   render: boolean;
   gc: boolean;
   frameCapture: boolean;
+  userTiming: boolean;
 
-  constructor({render = false, gc = false,
-               frameCapture = false}: {render?: boolean,
-                                       gc?: boolean,
-                                       frameCapture?: boolean} = {}) {
+  constructor(
+      {render = false, gc = false, frameCapture = false, userTiming = false}:
+          {render?: boolean, gc?: boolean, frameCapture?: boolean, userTiming?: boolean} = {}) {
     this.render = render;
     this.gc = gc;
     this.frameCapture = frameCapture;
+    this.userTiming = userTiming;
   }
 }
 

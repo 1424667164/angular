@@ -29,7 +29,11 @@ tmp
 pubspec.lock
 .c9
 .idea/
+.settings/
 *.swo
+modules/.settings
+.vscode
+modules/.vscode
 
 # Don't check in secret files
 *secret.js
@@ -38,3 +42,9 @@ pubspec.lock
 npm-debug.log
 
 /docs/bower_components/
+
+# build-analytics
+.build-analytics
+
+# built dart payload tests
+/modules_dart/payload/**/build

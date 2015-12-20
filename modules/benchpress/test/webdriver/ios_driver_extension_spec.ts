@@ -9,7 +9,7 @@ import {
   inject,
   it,
   xit,
-} from 'angular2/test_lib';
+} from 'angular2/testing_internal';
 
 import {PromiseWrapper} from 'angular2/src/facade/async';
 import {Json, isBlank, isPresent} from 'angular2/src/facade/lang';
@@ -19,7 +19,8 @@ import {
   IOsDriverExtension,
   WebDriverAdapter,
   Injector,
-  bind
+  bind,
+  provide
 } from 'benchpress/common';
 
 import {TraceEventFactory} from '../trace_event_factory';
@@ -36,11 +37,12 @@ export function main() {
         perfRecords = [];
       }
       log = [];
-      extension = Injector.resolveAndCreate([
-                            IOsDriverExtension.BINDINGS,
-                            bind(WebDriverAdapter).toValue(new MockDriverAdapter(log, perfRecords))
-                          ])
-                      .get(IOsDriverExtension);
+      extension =
+          Injector.resolveAndCreate([
+                    IOsDriverExtension.BINDINGS,
+                    provide(WebDriverAdapter, {useValue: new MockDriverAdapter(log, perfRecords)})
+                  ])
+              .get(IOsDriverExtension);
       return extension;
     }
 
@@ -71,8 +73,8 @@ export function main() {
          createExtension()
              .timeEnd('name1', 'name2')
              .then((_) => {
-               expect(log).toEqual(
-                   [['executeScript', `console.timeEnd('name1');console.time('name2');`]]);
+               expect(log)
+                   .toEqual([['executeScript', `console.timeEnd('name1');console.time('name2');`]]);
                async.done();
              });
        }));
@@ -192,7 +194,7 @@ function internalScriptRecord(startTime, endTime) {
 }
 
 class MockDriverAdapter extends WebDriverAdapter {
-  constructor(private _log: List<any>, private _perfRecords: List<any>) { super(); }
+  constructor(private _log: any[], private _perfRecords: any[]) { super(); }
 
   executeScript(script) {
     this._log.push(['executeScript', script]);

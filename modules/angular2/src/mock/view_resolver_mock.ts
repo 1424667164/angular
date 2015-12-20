@@ -1,24 +1,31 @@
+import {Injectable} from 'angular2/src/core/di';
 import {Map, MapWrapper, ListWrapper} from 'angular2/src/facade/collection';
-import {Type, isPresent, BaseException, stringify, isBlank} from 'angular2/src/facade/lang';
+import {Type, isPresent, stringify, isBlank} from 'angular2/src/facade/lang';
+import {BaseException, WrappedException} from 'angular2/src/facade/exceptions';
 
-import {View} from 'angular2/src/core/annotations_impl/view';
-import {ViewResolver} from 'angular2/src/core/compiler/view_resolver';
+import {ViewMetadata} from '../core/metadata';
+import {ViewResolver} from 'angular2/src/core/linker/view_resolver';
 
+@Injectable()
 export class MockViewResolver extends ViewResolver {
-  _views: Map<Type, View> = new Map();
-  _inlineTemplates: Map<Type, string> = new Map();
-  _viewCache: Map<Type, View> = new Map();
-  _directiveOverrides: Map<Type, Map<Type, Type>> = new Map();
+  /** @internal */
+  _views = new Map<Type, ViewMetadata>();
+  /** @internal */
+  _inlineTemplates = new Map<Type, string>();
+  /** @internal */
+  _viewCache = new Map<Type, ViewMetadata>();
+  /** @internal */
+  _directiveOverrides = new Map<Type, Map<Type, Type>>();
 
   constructor() { super(); }
 
   /**
-   * Overrides the {@link View} for a component.
+   * Overrides the {@link ViewMetadata} for a component.
    *
    * @param {Type} component
    * @param {ViewDefinition} view
    */
-  setView(component: Type, view: View): void {
+  setView(component: Type, view: ViewMetadata): void {
     this._checkOverrideable(component);
     this._views.set(component, view);
   }
@@ -35,7 +42,7 @@ export class MockViewResolver extends ViewResolver {
   }
 
   /**
-   * Overrides a directive from the component {@link View}.
+   * Overrides a directive from the component {@link ViewMetadata}.
    *
    * @param {Type} component
    * @param {Type} from
@@ -47,7 +54,7 @@ export class MockViewResolver extends ViewResolver {
     var overrides = this._directiveOverrides.get(component);
 
     if (isBlank(overrides)) {
-      overrides = new Map();
+      overrides = new Map<Type, Type>();
       this._directiveOverrides.set(component, overrides);
     }
 
@@ -55,8 +62,8 @@ export class MockViewResolver extends ViewResolver {
   }
 
   /**
-   * Returns the {@link View} for a component:
-   * - Set the {@link View} to the overridden view when it exists or fallback to the default
+   * Returns the {@link ViewMetadata} for a component:
+   * - Set the {@link ViewMetadata} to the overridden view when it exists or fallback to the default
    * `ViewResolver`,
    *   see `setView`.
    * - Override the directives, see `overrideViewDirective`.
@@ -65,7 +72,7 @@ export class MockViewResolver extends ViewResolver {
    * @param component
    * @returns {ViewDefinition}
    */
-  resolve(component: Type): View {
+  resolve(component: Type): ViewMetadata {
     var view = this._viewCache.get(component);
     if (isPresent(view)) return view;
 
@@ -79,7 +86,7 @@ export class MockViewResolver extends ViewResolver {
 
     if (isPresent(overrides) && isPresent(directives)) {
       directives = ListWrapper.clone(view.directives);
-      MapWrapper.forEach(overrides, (to, from) => {
+      overrides.forEach((to, from) => {
         var srcIndex = directives.indexOf(from);
         if (srcIndex == -1) {
           throw new BaseException(
@@ -87,13 +94,14 @@ export class MockViewResolver extends ViewResolver {
         }
         directives[srcIndex] = to;
       });
-      view = new View(
+      view = new ViewMetadata(
           {template: view.template, templateUrl: view.templateUrl, directives: directives});
     }
 
     var inlineTemplate = this._inlineTemplates.get(component);
     if (isPresent(inlineTemplate)) {
-      view = new View({template: inlineTemplate, templateUrl: null, directives: view.directives});
+      view = new ViewMetadata(
+          {template: inlineTemplate, templateUrl: null, directives: view.directives});
     }
 
     this._viewCache.set(component, view);
@@ -101,6 +109,8 @@ export class MockViewResolver extends ViewResolver {
   }
 
   /**
+   * @internal
+   *
    * Once a component has been compiled, the AppProtoView is stored in the compiler cache.
    *
    * Then it should not be possible to override the component configuration after the component

@@ -2,22 +2,25 @@
 
 'use strict';
 
+/**
+ * Just a small command-line wrapper around the conventional-changelog npm module
+ * (https://www.npmjs.com/package/conventional-changelog), which also prepends
+ * changes to CHANGELOG.md.
+ *
+ * Runs with default (latest tag...head)
+ * $ ./changelog.js
+ */
+
 var fs = require('fs');
 var cl = require('conventional-changelog');
 
-var changelogFile = 'CHANGELOG.md';
+var changelogStream = fs.createWriteStream('CHANGELOG.md');
 
 var config = {
-  file: changelogFile,
-  repository: 'https://github.com/angular/angular',
-  version: require('../../package.json').version
+  preset: 'angular',
+  releaseCount: 1,
 };
 
-cl(config, function(err, log) {
-  if (err) {
-    console.error('Failed to generate changelog: ' + err);
-    return;
-  }
-
-  fs.writeFileSync(changelogFile, log);
-});
+cl(config).on('error', function(err) {
+            console.error('Failed to generate changelog: ' + err);
+          }).pipe(changelogStream);
