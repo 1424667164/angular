@@ -1,7 +1,15 @@
-import {runClickBenchmark, verifyNoBrowserErrors} from 'angular2/src/test_lib/perf_util';
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+
+import {runClickBenchmark, verifyNoBrowserErrors} from '@angular/testing/src/perf_util';
 
 describe('ng1.x largetable benchmark', function() {
-  var URL = 'benchmarks_external/src/largetable/largetable_benchmark.html';
+  const URL = 'benchmarks_external/src/largetable/largetable_benchmark.html';
 
   afterEach(verifyNoBrowserErrors);
 
@@ -17,7 +25,8 @@ describe('ng1.x largetable benchmark', function() {
               {name: 'columns', value: 100, scale: 'sqrt'},
               {name: 'rows', value: 20, scale: 'sqrt'},
               {name: 'benchmarkType', value: benchmarkType}
-            ]
+            ],
+            waitForAngular2: false
           }).then(done, done.fail);
         });
       });

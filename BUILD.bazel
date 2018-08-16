@@ -1,0 +1,45 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@build_bazel_rules_nodejs//:defs.bzl", "node_modules_filegroup")
+
+exports_files([
+    "tsconfig.json",
+    "LICENSE",
+    "protractor-perf.conf.js",
+])
+
+# Developers should always run `bazel run :install`
+# This ensures that package.json in subdirectories get installed as well.
+alias(
+    name = "install",
+    actual = "@nodejs//:yarn",
+)
+
+alias(
+    name = "node_modules",
+    actual = "@angular_deps//:node_modules",
+)
+
+filegroup(
+    name = "web_test_bootstrap_scripts",
+    # do not sort
+    srcs = [
+        "@angular_deps//:node_modules/reflect-metadata/Reflect.js",
+        "@angular_deps//:node_modules/zone.js/dist/zone.js",
+        "@angular_deps//:node_modules/zone.js/dist/zone-testing.js",
+        "@angular_deps//:node_modules/zone.js/dist/task-tracking.js",
+        "//:test-events.js",
+    ],
+)
+
+filegroup(
+    name = "angularjs_scripts",
+    srcs = [
+        "@angular_deps//:node_modules/angular-1.5/angular.js",
+        "@angular_deps//:node_modules/angular-1.6/angular.js",
+        "@angular_deps//:node_modules/angular-mocks-1.5/angular-mocks.js",
+        "@angular_deps//:node_modules/angular-mocks-1.6/angular-mocks.js",
+        "@angular_deps//:node_modules/angular-mocks/angular-mocks.js",
+        "@angular_deps//:node_modules/angular/angular.js",
+    ],
+)
